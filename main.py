@@ -1,40 +1,34 @@
-from telegram.ext import Updater, CommandHandler
+from telegram.ext import Application, CommandHandler
 from config import TOKEN, CHANNEL_USERNAME
 
 # Обработчик команды /start
-def start(update, context):
+async def start(update, context):
     user = update.message.from_user
-    update.message.reply_text(f'Привет, {user.first_name}! Отправьте заявку на вступление в канал.')
+    await update.message.reply_text(f'Привет, {user.first_name}!\nВот ссылка на закрытый канал.\nhttps://t.me/+y1om0bSvon1iODIy')
 
 # Обработчик команды для заявки на вступление
-def join_channel(update, context):
+async def join_channel(update, context):
     user = update.message.from_user
 
     try:
         # Добавляем пользователя в канал
-        context.bot.add_chat_member(chat_id=CHANNEL_USERNAME,
+        await context.bot.add_chat_member(chat_id=CHANNEL_USERNAME,
                                     user_id=user.id,
                                     can_send_messages=False)  # пользователь может отправлять сообщения
-        update.message.reply_text(f'Добро пожаловать в канал, {user.first_name}!')
+        await update.message.reply_text(f'Добро пожаловать в канал, {user.first_name}!')
     except Exception as e:
-        update.message.reply_text('Что-то пошло не так. Попробуйте позже.')
+        await update.message.reply_text('Что-то пошло не так. Попробуйте позже.')
 
 def main():
-    # Создаем экземпляр Updater и передаем ему токен вашего бота
-    updater = Updater(token=TOKEN, use_context=True)
-
-    # Получаем диспетчер для регистрации обработчиков
-    dispatcher = updater.dispatcher
+    # Создаем экземпляр Application и передаем ему токен вашего бота
+    application = Application.builder().token(TOKEN).build()
 
     # Регистрируем обработчики команд
-    dispatcher.add_handler(CommandHandler("start", start))
-    dispatcher.add_handler(CommandHandler("join", join_channel))
+    application.add_handler(CommandHandler("start", start))
+    application.add_handler(CommandHandler("join", join_channel))
 
     # Начинаем поиск обновлений
-    updater.start_polling()
-
-    # Останавливаем бота при нажатии Ctrl+C
-    updater.idle()
+    application.run_polling()
 
 if __name__ == '__main__':
     main()
