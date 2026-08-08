@@ -12,7 +12,7 @@ async def auto_approve(update, context):
     if update.chat_member.new_chat_member.status == 'requested':
         user_id = update.chat_member.from_user.id
         chat_id = update.chat_member.chat.id
-        
+
         try:
             # Принимаем заявку
             await context.bot.approve_chat_join_request(chat_id=chat_id, user_id=user_id)
@@ -26,7 +26,7 @@ def main():
 
     # Регистрируем обработчики команд
     application.add_handler(CommandHandler("start", start))
-    
+
     # Регистрируем обработчик заявок (автоматическое принятие)
     application.add_handler(ChatMemberHandler(auto_approve, ChatMemberHandler.CHAT_MEMBER))
 
