@@ -1,40 +1,37 @@
-from telegram.ext import Updater, CommandHandler
+from telegram.ext import Application, CommandHandler, ChatMemberHandler
 from config import TOKEN, CHANNEL_USERNAME
 
 # Обработчик команды /start
-def start(update, context):
+async def start(update, context):
     user = update.message.from_user
-    update.message.reply_text(f'Привет, {user.first_name}! Отправьте заявку на вступление в канал.')
+    await update.message.reply_text(f'Привет, {user.first_name}!\nВот ссылка на закрытую группу.\nhttps://t.me/+y1om0bSvon1iODIy')
 
-# Обработчик команды для заявки на вступление
-def join_channel(update, context):
-    user = update.message.from_user
+# Обработчик изменения статуса участника (автоматическое принятие заявок)
+async def auto_approve(update, context):
+    # Проверяем, что это запрос на вступление в канал
+    if update.chat_member.new_chat_member.status == 'requested':
+        user_id = update.chat_member.from_user.id
+        chat_id = update.chat_member.chat.id
 
-    try:
-        # Добавляем пользователя в канал
-        context.bot.add_chat_member(chat_id=CHANNEL_USERNAME,
-                                    user_id=user.id,
-                                    can_send_messages=False)  # пользователь может отправлять сообщения
-        update.message.reply_text(f'Добро пожаловать в канал, {user.first_name}!')
-    except Exception as e:
-        update.message.reply_text('Что-то пошло не так. Попробуйте позже.')
+        try:
+            # Принимаем заявку
+            await context.bot.approve_chat_join_request(chat_id=chat_id, user_id=user_id)
+            print(f'Заявка от пользователя {user_id} принята')
+        except Exception as e:
+            print(f'Ошибка при принятии заявки: {e}')
 
 def main():
-    # Создаем экземпляр Updater и передаем ему токен вашего бота
-    updater = Updater(token=TOKEN, use_context=True)
-
-    # Получаем диспетчер для регистрации обработчиков
-    dispatcher = updater.dispatcher
+    # Создаем экземпляр Application
+    application = Application.builder().token(TOKEN).build()
 
     # Регистрируем обработчики команд
-    dispatcher.add_handler(CommandHandler("start", start))
-    dispatcher.add_handler(CommandHandler("join", join_channel))
+    application.add_handler(CommandHandler("start", start))
+
+    # Регистрируем обработчик заявок (автоматическое принятие)
+    application.add_handler(ChatMemberHandler(auto_approve, ChatMemberHandler.CHAT_MEMBER))
 
     # Начинаем поиск обновлений
-    updater.start_polling()
-
-    # Останавливаем бота при нажатии Ctrl+C
-    updater.idle()
+    application.run_polling()
 
 if __name__ == '__main__':
     main()
