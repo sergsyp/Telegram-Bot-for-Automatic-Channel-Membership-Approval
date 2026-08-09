@@ -5,7 +5,7 @@ from telegram.constants import ParseMode
 from telegram.ext import Application, CallbackQueryHandler, ChatJoinRequestHandler, CommandHandler, ContextTypes, MessageHandler, filters
 from config import ADMIN_CHAT_ID, DATABASE_PATH, TOKEN
 from database import Database
-from podcasts import PODCASTS, season_text
+from podcasts import PODCASTS, search_text, season_text
 
 logging.basicConfig(format="%(asctime)s %(levelname)s %(name)s: %(message)s", level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -30,7 +30,13 @@ CLUB_TEXT = """👥 <b>Клуб «Мир 1С»</b>
 Общаемся на «ты», без осуждения, менторского тона и обесценивания — с фокусом на поддержку и практическую пользу."""
 ABOUT_TEXT = """👤 <b>Кратко обо мне</b>
 
-Меня зовут Сергей Сыпачев. В 1С с 1999 года — прошёл путь от разработчика до руководителя проектов. Сейчас руковожу внедрением «1С:ERP.УХ»."""
+Основу моей экспертизы составляет уникальное сочетание глубоких технических знаний и сильных управленческих компетенций, отточенных за четверть века практики в ИТ.
+
+Мой путь начался в 1999 году с написания кода, что заложило фундаментальное понимание всех процессов разработки. Я прошел все ключевые этапы эволюции отрасли: от сопровождения и разработки проектов на 1С и Java до создания мобильных приложений и организации сложных системных интеграций.
+
+Со временем моя роль трансформировалась из технического специалиста в архитектора решений и лидера команд. Я приобрел бесценный опыт не только в создании продуктов (как собственных, так и на базе типовых конфигураций), но и в формировании высокоэффективных команд: я нанимал, развивал и руководил штатными разработчиками, а также выстраивал продуктивную работу с внешними подрядчиками.
+
+Этот многогранный опыт позволяет мне видеть проект целостно — от архитектурной концепции и линии кода до бизнес-результата и эффективной работы команды."""
 SOCIAL_TEXT = """🌐 <b>Социальные сети</b>
 
 • <a href="https://t.me/sergsyp">Канал «Мир 1С»</a>
@@ -45,7 +51,7 @@ CONTACTS_TEXT = """✉️ <b>Контакты</b>
 
 • <a href="https://max.ru/u/f9LHodD0cOJu2apFmd-4ceDEioEv5nebgJpi4Irb8KSJzNHO8MtcxfKf628">MAX</a>
 • <a href="https://t.me/ssypachev">Telegram</a>
-• <a href="mailto:s@sypachev.ru">Почта</a>"""
+• Почта: <a href="mailto:s@sypachev.ru">s@sypachev.ru</a>"""
 PROPOSAL_TEXT = """🎤 <b>Попасть на подкаст</b>
 
 Есть интересная тема или полезный опыт?
@@ -65,11 +71,13 @@ def podcasts_menu():
     rows=[[InlineKeyboardButton("📚 Все сезоны",callback_data="all_seasons")]]
     for start in range(1,len(PODCASTS)+1,3):
         rows.append([InlineKeyboardButton(f"Сезон {s}",callback_data=f"season:{s}") for s in range(start,min(start+3,len(PODCASTS)+1))])
+    rows.append([InlineKeyboardButton("🔎 Поиск",callback_data="podcast_search")])
     rows.append([InlineKeyboardButton("🏠 Главное меню",callback_data="menu")])
     return InlineKeyboardMarkup(rows)
 
 async def start(update,context):
     context.user_data.pop("awaiting_proposal",None)
+    context.user_data.pop("awaiting_podcast_search",None)
     db.upsert_user(update.effective_user); db.log_action(update.effective_user.id,"start")
     await update.message.reply_text(WELCOME_TEXT,reply_markup=main_menu())
 
@@ -77,6 +85,7 @@ async def on_callback(update,context):
     query=update.callback_query; await query.answer(); action=query.data
     db.upsert_user(update.effective_user); db.log_action(update.effective_user.id,action)
     context.user_data.pop("awaiting_proposal",None)
+    context.user_data.pop("awaiting_podcast_search",None)
     if action=="menu": await query.edit_message_text(WELCOME_TEXT,reply_markup=main_menu())
     elif action=="podcasts": await query.edit_message_text("🎙 <b>Подкасты «Мир 1С»</b>\n\nВыбери сезон или открой весь каталог:",parse_mode=ParseMode.HTML,reply_markup=podcasts_menu())
     elif action=="all_seasons":
@@ -86,6 +95,9 @@ async def on_callback(update,context):
     elif action.startswith("season:"):
         season=int(action.split(":",1)[1])
         await query.edit_message_text(season_text(season),parse_mode=ParseMode.HTML,disable_web_page_preview=True,reply_markup=navigation("podcasts"))
+    elif action=="podcast_search":
+        context.user_data["awaiting_podcast_search"]=True
+        await query.edit_message_text("🔎 <b>Поиск по подкастам</b>\n\nВведи часть названия, темы или имени гостя.",parse_mode=ParseMode.HTML,reply_markup=navigation("podcasts"))
     elif action=="club": await query.edit_message_text(CLUB_TEXT,parse_mode=ParseMode.HTML,reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("🔗 Вступить в клуб",url="https://t.me/+y1om0bSvon1iODIy")],[InlineKeyboardButton("🏠 Главное меню",callback_data="menu")]]))
     elif action=="about": await query.edit_message_text("👤 <b>Обо мне</b>",parse_mode=ParseMode.HTML,reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("Кратко обо мне",callback_data="about_short")],[InlineKeyboardButton("🌐 Социальные сети",callback_data="social")],[InlineKeyboardButton("🏠 Главное меню",callback_data="menu")]]))
     elif action=="about_short": await query.edit_message_text(ABOUT_TEXT,parse_mode=ParseMode.HTML,reply_markup=navigation("about"))
@@ -96,6 +108,15 @@ async def on_callback(update,context):
         await query.edit_message_text(PROPOSAL_TEXT,parse_mode=ParseMode.HTML,reply_markup=navigation())
 
 async def receive_proposal(update,context):
+    if context.user_data.pop("awaiting_podcast_search",None):
+        query=update.message.text.strip()
+        if len(query)<2:
+            context.user_data["awaiting_podcast_search"]=True
+            await update.message.reply_text("Введи не менее двух символов."); return
+        results=search_text(query)
+        for index, result in enumerate(results):
+            await update.message.reply_text(result,parse_mode=ParseMode.HTML,disable_web_page_preview=True,reply_markup=navigation("podcasts") if index==len(results)-1 else None)
+        return
     if not context.user_data.get("awaiting_proposal"): return
     text=update.message.text.strip()
     if len(text)<20:

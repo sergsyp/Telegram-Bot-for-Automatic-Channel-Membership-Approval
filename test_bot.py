@@ -8,8 +8,8 @@ os.environ.setdefault("BOT_TOKEN", "123456:TEST_TOKEN_FOR_LOCAL_TESTS_ONLY")
 os.environ.setdefault("DATABASE_PATH", ":memory:")
 
 from database import Database
-from main import CLUB_TEXT, CONTACTS_TEXT, SOCIAL_TEXT, WELCOME_TEXT, build_application, main_menu, podcasts_menu
-from podcasts import PODCASTS, season_text
+from main import ABOUT_TEXT, CLUB_TEXT, CONTACTS_TEXT, SOCIAL_TEXT, WELCOME_TEXT, build_application, main_menu, podcasts_menu
+from podcasts import GUESTS, PODCASTS, search_text, season_text
 
 
 class BotTests(unittest.TestCase):
@@ -27,12 +27,27 @@ class BotTests(unittest.TestCase):
                 self.assertIn(f"https://t.me/sergsyp/{episode[2]}", text)
 
     def test_all_texts_fit_telegram_limit(self):
-        for text in (WELCOME_TEXT, CLUB_TEXT, SOCIAL_TEXT, CONTACTS_TEXT):
+        for text in (WELCOME_TEXT, CLUB_TEXT, ABOUT_TEXT, SOCIAL_TEXT, CONTACTS_TEXT):
             self.assertLessEqual(len(text), 4096)
 
     def test_main_menu_has_five_sections(self):
         self.assertEqual(len(main_menu().inline_keyboard), 5)
         self.assertEqual(podcasts_menu().inline_keyboard[0][0].callback_data, "all_seasons")
+        self.assertTrue(any(button.callback_data == "podcast_search" for row in podcasts_menu().inline_keyboard for button in row))
+
+    def test_guests_and_search(self):
+        self.assertEqual(GUESTS[260], "Кирилл Комаров, Александр Гречушкин")
+        result = "\n".join(search_text("дорошкевич"))
+        self.assertIn("Антон Дорошкевич", result)
+        self.assertIn("https://t.me/sergsyp/253", result)
+        self.assertIn("Ничего не найдено", search_text("несуществующая-тема-xyz")[0])
+        broad_results = search_text("1с")
+        self.assertGreater(len(broad_results), 1)
+        self.assertTrue(all(len(message) <= 4096 for message in broad_results))
+
+    def test_email_is_explicit_link(self):
+        self.assertIn('href="mailto:s@sypachev.ru"', CONTACTS_TEXT)
+        self.assertIn('>s@sypachev.ru</a>', CONTACTS_TEXT)
 
     def test_application_registers_all_handler_groups(self):
         app = build_application()
