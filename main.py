@@ -78,7 +78,8 @@ def podcasts_menu():
 async def start(update,context):
     context.user_data.pop("awaiting_proposal",None)
     context.user_data.pop("awaiting_podcast_search",None)
-    db.upsert_user(update.effective_user); db.log_action(update.effective_user.id,"start")
+    db.upsert_user(update.effective_user)
+    db.log_action(update.effective_user.id,"command_start",{"command":update.message.text.split()[0]})
     await update.message.reply_text(WELCOME_TEXT,reply_markup=main_menu())
 
 async def on_callback(update,context):
@@ -111,37 +112,63 @@ async def receive_proposal(update,context):
     if context.user_data.pop("awaiting_podcast_search",None):
         query=update.message.text.strip()
         if len(query)<2:
+            db.log_action(update.effective_user.id,"podcast_search_invalid",{"query_length":len(query)},False)
             context.user_data["awaiting_podcast_search"]=True
             await update.message.reply_text("Введи не менее двух символов."); return
         results=search_text(query)
+        db.log_action(update.effective_user.id,"podcast_search",{"query":query,"results":len(results)})
         for index, result in enumerate(results):
             await update.message.reply_text(result,parse_mode=ParseMode.HTML,disable_web_page_preview=True,reply_markup=navigation("podcasts") if index==len(results)-1 else None)
         return
     if not context.user_data.get("awaiting_proposal"): return
     text=update.message.text.strip()
     if len(text)<20:
+        db.log_action(update.effective_user.id,"podcast_proposal_invalid",{"text_length":len(text)},False)
         await update.message.reply_text("Расскажи чуть подробнее — сообщение должно содержать хотя бы 20 символов."); return
     user=update.effective_user; proposal_id=db.save_proposal(user,text)
     username=f"@{user.username}" if user.username else "не указан"
     admin_text=f"🎤 <b>Новое предложение для подкаста №{proposal_id}</b>\n\nОт: {escape(user.full_name)}\nUsername: {escape(username)}\nTelegram ID: <code>{user.id}</code>\n\n{escape(text)}"
     try: await context.bot.send_message(ADMIN_CHAT_ID,admin_text,parse_mode=ParseMode.HTML)
     except Exception:
+        db.log_action(user.id,"podcast_proposal_delivery",{"proposal_id":proposal_id},False)
         logger.exception("Не удалось переслать предложение %s",proposal_id)
         await update.message.reply_text("Не удалось передать предложение. Попробуй ещё раз немного позже.",reply_markup=main_menu()); return
+    db.log_action(user.id,"podcast_proposal_delivery",{"proposal_id":proposal_id},True)
     context.user_data.pop("awaiting_proposal",None)
     await update.message.reply_text("✅ Спасибо! Предложение передано Сергею.",reply_markup=main_menu())
 
 async def auto_approve(update,context):
     request=update.chat_join_request
     try:
-        await request.approve(); db.log_action(request.from_user.id,f"join_request_approved:{request.chat.id}")
-    except Exception: logger.exception("Не удалось принять заявку пользователя %s",request.from_user.id)
+        await request.approve(); db.log_action(request.from_user.id,"join_request_approved",{"chat_id":request.chat.id})
+    except Exception:
+        db.log_action(request.from_user.id,"join_request_approved",{"chat_id":request.chat.id},False)
+        logger.exception("Не удалось принять заявку пользователя %s",request.from_user.id)
 
-async def error_handler(update,context): logger.exception("Необработанная ошибка",exc_info=context.error)
+async def stats(update,context):
+    if update.effective_user.id != ADMIN_CHAT_ID:
+        db.log_action(update.effective_user.id,"command_stats_denied",success=False)
+        return
+    labels=((1,"24 часа"),(7,"7 дней"),(30,"30 дней"))
+    blocks=[]
+    for days,label in labels:
+        report=db.stats(days)
+        top=", ".join(f"{escape(action)} — {amount}" for action,amount in report["actions"][:5]) or "нет данных"
+        blocks.append(
+            f"<b>{label}</b>: событий {report['events']}, пользователей {report['users']}, "
+            f"ошибок {report['errors']}\nПопулярные действия: {top}"
+        )
+    db.log_action(update.effective_user.id,"command_stats")
+    await update.message.reply_text("📊 <b>Статистика бота</b>\n\n"+"\n\n".join(blocks),parse_mode=ParseMode.HTML)
+
+async def error_handler(update,context):
+    user_id=update.effective_user.id if update and update.effective_user else None
+    db.log_action(user_id,"unhandled_error",{"type":type(context.error).__name__},False)
+    logger.exception("Необработанная ошибка",exc_info=context.error)
 
 def build_application():
     db.initialize(); application=Application.builder().token(TOKEN).build()
-    application.add_handler(CommandHandler("start",start)); application.add_handler(CommandHandler("menu",start))
+    application.add_handler(CommandHandler("start",start)); application.add_handler(CommandHandler("menu",start)); application.add_handler(CommandHandler("stats",stats))
     application.add_handler(CallbackQueryHandler(on_callback)); application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND,receive_proposal)); application.add_handler(ChatJoinRequestHandler(auto_approve)); application.add_error_handler(error_handler)
     return application
 
