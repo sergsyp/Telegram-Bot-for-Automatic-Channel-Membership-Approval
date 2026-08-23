@@ -8,7 +8,7 @@ os.environ.setdefault("BOT_TOKEN", "123456:TEST_TOKEN_FOR_LOCAL_TESTS_ONLY")
 os.environ.setdefault("DATABASE_PATH", ":memory:")
 
 from database import Database
-from main import ABOUT_TEXT, CLUB_TEXT, CONTACTS_TEXT, SOCIAL_TEXT, WELCOME_TEXT, build_application, main_menu, podcasts_menu
+from main import ABOUT_TEXT, CLUB_TEXT, CONTACTS_TEXT, SOCIAL_TEXT, WELCOME_TEXT, build_application, main_menu, podcasts_menu, _msk_time
 from podcasts import GUESTS, PODCASTS, search_text, season_text, stats_text
 
 
@@ -56,6 +56,9 @@ class BotTests(unittest.TestCase):
             "Telegram 1 430 | Всего 4 850 просмотров",
         )
         self.assertNotIn("—", text)
+
+    def test_collection_time_is_shown_in_moscow_timezone(self):
+        self.assertEqual(_msk_time("2026-08-23 12:00:00"), "23.08.2026 15:00 мск")
 
     def test_email_is_explicit_link(self):
         self.assertIn('href="mailto:s@sypachev.ru"', CONTACTS_TEXT)

@@ -82,6 +82,21 @@ class DatabaseTest(unittest.TestCase):
             self.assertEqual(connection.execute(
                 "SELECT view_count FROM publication_latest_stats").fetchone()[0], 100)
 
+    def test_collection_status_reports_run_platforms_and_errors(self):
+        self.db.sync_podcast_catalog({1: [("Выпуск", "Описание", 999)]})
+        publication = self.db.active_publications()[0]
+        run_id = self.db.start_stats_run(1)
+        self.db.save_publication_stat(run_id, publication["id"], 321, 40)
+        self.db.finish_stats_run(run_id, 1, 0)
+
+        report = self.db.collection_status()
+
+        self.assertEqual(report["last_run"]["id"], run_id)
+        self.assertEqual(report["last_run"]["status"], "success")
+        self.assertEqual(report["platforms"][0]["name"], "Telegram")
+        self.assertEqual(report["platforms"][0]["success_count"], 1)
+        self.assertEqual(report["latest"]["count"], 1)
+
 
 if __name__ == "__main__":
     unittest.main()

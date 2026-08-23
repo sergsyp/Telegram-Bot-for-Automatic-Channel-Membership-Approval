@@ -276,6 +276,66 @@ class Database:
                 (status, success_count, error_count, summary, run_id))
         return status
 
+    def collection_status(self):
+        """Build an administrator-facing snapshot of statistics collection."""
+        with self.connect() as connection:
+            connection.row_factory = sqlite3.Row
+            last_run_row = connection.execute("""
+                SELECT id, started_at, finished_at, status, planned_count,
+                       success_count, error_count,
+                       CASE WHEN finished_at IS NULL THEN NULL ELSE
+                           CAST(ROUND((julianday(finished_at)-julianday(started_at))*86400)
+                                AS INTEGER)
+                       END AS duration_seconds
+                FROM stats_update_runs ORDER BY id DESC LIMIT 1
+            """).fetchone()
+            last_run = dict(last_run_row) if last_run_row else None
+            platforms = []
+            errors = []
+            if last_run:
+                platforms = [dict(row) for row in connection.execute("""
+                    SELECT p.name,
+                           COUNT(DISTINCT h.publication_id) AS success_count,
+                           COUNT(DISTINCT e.publication_id) AS error_count
+                    FROM platforms p
+                    LEFT JOIN episode_publications ep
+                           ON ep.platform_id=p.id AND ep.is_active=1
+                    LEFT JOIN publication_stats_history h
+                           ON h.publication_id=ep.id AND h.run_id=?
+                    LEFT JOIN stats_update_errors e
+                           ON e.publication_id=ep.id AND e.run_id=?
+                    WHERE p.stats_status='collect' AND p.is_active=1
+                    GROUP BY p.id, p.name
+                    HAVING success_count > 0 OR error_count > 0
+                    ORDER BY p.id
+                """, (last_run["id"], last_run["id"]))]
+                errors = [dict(row) for row in connection.execute("""
+                    SELECT p.name AS platform_name, pe.title, e.error_type,
+                           e.error_message, e.attempts, e.created_at
+                    FROM stats_update_errors e
+                    JOIN episode_publications ep ON ep.id=e.publication_id
+                    JOIN platforms p ON p.id=ep.platform_id
+                    JOIN podcast_episodes pe ON pe.id=ep.episode_id
+                    WHERE e.run_id=? ORDER BY e.id LIMIT 5
+                """, (last_run["id"],))]
+            recent_runs = [dict(row) for row in connection.execute("""
+                SELECT id, started_at, status, planned_count, success_count,
+                       error_count
+                FROM stats_update_runs ORDER BY id DESC LIMIT 5
+            """)]
+            latest = connection.execute("""
+                SELECT COUNT(*) AS count, MIN(collected_at) AS oldest_at,
+                       MAX(collected_at) AS newest_at
+                FROM publication_latest_stats WHERE source_status='ok'
+            """).fetchone()
+        return {
+            "last_run": last_run,
+            "platforms": platforms,
+            "errors": errors,
+            "recent_runs": recent_runs,
+            "latest": dict(latest),
+        }
+
     def upsert_user(self, user):
         with self.connect() as connection:
             connection.execute("""
