@@ -1,6 +1,11 @@
 import unittest
 
-from view_stats import ViewCountError, extract_view_count
+from view_stats import (
+    ViewCountError,
+    extract_view_count,
+    parse_vk_video_id,
+    parse_youtube_video_id,
+)
 
 
 class ViewStatsTest(unittest.TestCase):
@@ -22,6 +27,19 @@ class ViewStatsTest(unittest.TestCase):
     def test_missing_public_counter_is_an_error(self):
         with self.assertRaises(ViewCountError):
             extract_view_count("yandex_music", "<html>Нет публичного счётчика</html>")
+
+    def test_extracts_dzen_open_graph_counter(self):
+        html = '<meta property="ya:ovs:views_total" content="106"/>'
+        self.assertEqual(extract_view_count("dzen", html), 106)
+
+    def test_parses_vk_video_url(self):
+        self.assertEqual(
+            parse_vk_video_id("https://vkvideo.ru/video-227129566_456239030"),
+            "-227129566_456239030",
+        )
+
+    def test_parses_youtube_video_url(self):
+        self.assertEqual(parse_youtube_video_id("https://youtu.be/EAZvhLhImec"), "EAZvhLhImec")
 
 
 if __name__ == "__main__":

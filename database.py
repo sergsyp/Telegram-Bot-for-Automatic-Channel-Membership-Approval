@@ -50,6 +50,9 @@ class Database:
                     code TEXT NOT NULL UNIQUE,
                     name TEXT NOT NULL UNIQUE,
                     type TEXT NOT NULL CHECK(type IN ('video','audio','text')),
+                    stats_status TEXT NOT NULL DEFAULT 'collect'
+                        CHECK(stats_status IN ('collect','unsupported')),
+                    stats_status_reason TEXT,
                     is_active INTEGER NOT NULL DEFAULT 1,
                     created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
                     updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP);
@@ -125,22 +128,38 @@ class Database:
                 connection.execute(
                     "ALTER TABLE audit_log ADD COLUMN success INTEGER NOT NULL DEFAULT 1"
                 )
+            platform_columns = {
+                row[1] for row in connection.execute("PRAGMA table_info(platforms)")
+            }
+            if "stats_status" not in platform_columns:
+                connection.execute(
+                    "ALTER TABLE platforms ADD COLUMN stats_status TEXT NOT NULL DEFAULT 'collect'"
+                )
+            if "stats_status_reason" not in platform_columns:
+                connection.execute(
+                    "ALTER TABLE platforms ADD COLUMN stats_status_reason TEXT"
+                )
 
     def sync_podcast_catalog(self, podcasts):
         platforms = (
-            ("youtube", "YouTube", "video"),
-            ("vk_video", "VK Видео", "video"),
-            ("rutube", "RuTube", "video"),
-            ("dzen", "Дзен Видео", "video"),
-            ("yandex_music", "Яндекс Музыка", "audio"),
-            ("telegram", "Telegram", "text"),
-            ("max", "MAX", "text"),
+            ("youtube", "YouTube", "video", "collect", None),
+            ("vk_video", "VK Видео", "video", "collect", None),
+            ("rutube", "RuTube", "video", "collect", None),
+            ("dzen", "Дзен Видео", "video", "collect", None),
+            ("yandex_music", "Яндекс Музыка", "audio", "unsupported",
+             "Публичный счётчик прослушиваний выпусков отсутствует"),
+            ("telegram", "Telegram", "text", "collect", None),
+            ("max", "MAX", "text", "unsupported",
+             "Публичный стабильный счётчик сообщений пока недоступен"),
         )
         with self.connect() as connection:
             connection.executemany(
-                """INSERT INTO platforms(code,name,type) VALUES(?,?,?)
+                """INSERT INTO platforms(code,name,type,stats_status,stats_status_reason)
+                   VALUES(?,?,?,?,?)
                    ON CONFLICT(code) DO UPDATE SET name=excluded.name,
-                   type=excluded.type, updated_at=CURRENT_TIMESTAMP""", platforms)
+                   type=excluded.type, stats_status=excluded.stats_status,
+                   stats_status_reason=excluded.stats_status_reason,
+                   updated_at=CURRENT_TIMESTAMP""", platforms)
             telegram_platform_id = connection.execute(
                 "SELECT id FROM platforms WHERE code='telegram'"
             ).fetchone()[0]
@@ -202,6 +221,7 @@ class Database:
                 JOIN podcast_episodes pe ON pe.id=ep.episode_id
                 LEFT JOIN publication_latest_stats ls ON ls.publication_id=ep.id
                 WHERE ep.is_active=1 AND p.is_active=1 AND pe.is_active=1
+                  AND p.stats_status='collect'
                 ORDER BY p.id, pe.season_number, pe.episode_number
             """)]
 

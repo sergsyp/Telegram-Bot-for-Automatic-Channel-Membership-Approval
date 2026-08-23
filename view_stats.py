@@ -8,6 +8,8 @@ from zoneinfo import ZoneInfo
 
 import httpx
 
+from config import VK_SERVICE_TOKEN
+
 logger = logging.getLogger(__name__)
 MAX_RESPONSE_BYTES = 1_500_000
 
@@ -48,6 +50,7 @@ PATTERNS = {
         r'"views"\s*:\s*(\d+)',
     ),
     "dzen": (
+        r'ya:ovs:views_total["&quot;]*\s+content=["&quot;]+(\d+)',
         r'"viewsCount"\s*:\s*(\d+)',
         r'"views"\s*:\s*(\d+)',
     ),
@@ -79,6 +82,8 @@ def extract_view_count(platform_code, body, external_id=None):
 
 async def fetch_limited(client, url):
     headers = {"Range": f"bytes=0-{MAX_RESPONSE_BYTES - 1}"}
+    if "dzen.ru/" in url:
+        headers["Cookie"] = "zen_sso_checked=1; zen_vk_sso_checked=1"
     async with client.stream("GET", url, headers=headers) as response:
         response.raise_for_status()
         chunks, size = [], 0
@@ -87,12 +92,90 @@ async def fetch_limited(client, url):
             if size > MAX_RESPONSE_BYTES:
                 raise ViewCountError("Ответ площадки превышает лимит 1 МБ")
             chunks.append(chunk)
+            if "dzen.ru/" in url and size >= 8_192:
+                prefix = b"".join(chunks).decode(
+                    response.encoding or "utf-8", errors="replace"
+                )
+                if re.search(PATTERNS["dzen"][0], prefix, re.IGNORECASE):
+                    return prefix
         return b"".join(chunks).decode(response.encoding or "utf-8", errors="replace")
+
+
+def parse_vk_video_id(url):
+    match = re.search(r"video(-?\d+)_(\d+)", url)
+    if not match:
+        raise ViewCountError("Не удалось определить owner_id и video_id из ссылки VK")
+    return f"{match.group(1)}_{match.group(2)}"
+
+
+def parse_youtube_video_id(url):
+    match = re.search(
+        r"(?:youtu\.be/|youtube\.com/(?:watch\?[^#]*v=|shorts/|embed/))([\w-]{11})",
+        url,
+    )
+    if not match:
+        raise ViewCountError("Не удалось определить video_id из ссылки YouTube")
+    return match.group(1)
+
+
+async def collect_youtube(client, publication):
+    started = time.monotonic()
+    response = await client.post(
+        "https://www.youtube.com/youtubei/v1/player?prettyPrint=false",
+        json={
+            "context": {
+                "client": {
+                    "clientName": "ANDROID",
+                    "clientVersion": "20.10.38",
+                    "androidSdkVersion": 30,
+                    "hl": "ru",
+                    "gl": "RU",
+                }
+            },
+            "videoId": parse_youtube_video_id(publication["url"]),
+        },
+    )
+    response.raise_for_status()
+    payload = response.json()
+    details = payload.get("videoDetails") or {}
+    if "viewCount" not in details:
+        reason = payload.get("playabilityStatus", {}).get("reason", "счётчик не возвращён")
+        raise ViewCountError(f"YouTube: {reason}")
+    return int(details["viewCount"]), int((time.monotonic() - started) * 1000)
+
+
+async def collect_vk(client, publication):
+    if not VK_SERVICE_TOKEN:
+        raise ViewCountError("VK_SERVICE_TOKEN не настроен")
+    started = time.monotonic()
+    response = await client.get(
+        "https://api.vk.com/method/video.get",
+        params={
+            "access_token": VK_SERVICE_TOKEN,
+            "v": "5.199",
+            "videos": parse_vk_video_id(publication["url"]),
+        },
+    )
+    response.raise_for_status()
+    payload = response.json()
+    if "error" in payload:
+        error = payload["error"]
+        raise ViewCountError(
+            f"VK API {error.get('error_code')}: {error.get('error_msg', 'unknown error')}"
+        )
+    items = payload.get("response", {}).get("items", [])
+    if not items or "views" not in items[0]:
+        raise ViewCountError("VK API не вернул ролик или поле views")
+    return int(items[0]["views"]), int((time.monotonic() - started) * 1000)
 
 
 async def collect_publication(client, publication):
     started = time.monotonic()
     url = publication["url"]
+    if publication["platform_code"] == "youtube":
+        return await collect_youtube(client, publication)
+    if publication["platform_code"] == "vk_video":
+        return await collect_vk(client, publication)
     if publication["platform_code"] == "telegram":
         url = re.sub(r"https://t\.me/([^/]+)/", r"https://t.me/s/\1/", url)
     body = await fetch_limited(client, url)

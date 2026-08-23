@@ -47,6 +47,9 @@ class DatabaseTest(unittest.TestCase):
             self.assertEqual(connection.execute("SELECT COUNT(*) FROM episode_publications").fetchone()[0], 56)
             self.assertEqual(connection.execute(
                 "SELECT type FROM platforms WHERE code='yandex_music'").fetchone()[0], "audio")
+            self.assertEqual(connection.execute(
+                "SELECT stats_status FROM platforms WHERE code='yandex_music'"
+            ).fetchone()[0], "unsupported")
 
     def test_saves_history_latest_value_and_run_result(self):
         self.db.sync_podcast_catalog({1: [("Выпуск", "Описание", 999)]})
