@@ -6,6 +6,8 @@ from telegram.ext import Application, CallbackQueryHandler, ChatJoinRequestHandl
 from config import ADMIN_CHAT_ID, DATABASE_PATH, TOKEN
 from database import Database
 from podcasts import PODCASTS, search_text, season_text
+from publication_links import PUBLICATION_LINKS
+from view_stats import schedule_collection
 
 logging.basicConfig(format="%(asctime)s %(levelname)s %(name)s: %(message)s", level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -167,9 +169,11 @@ async def error_handler(update,context):
     logger.exception("Необработанная ошибка",exc_info=context.error)
 
 def build_application():
-    db.initialize(); application=Application.builder().token(TOKEN).build()
+    db.initialize(); db.sync_podcast_catalog(PODCASTS); db.sync_publication_links(PUBLICATION_LINKS)
+    application=Application.builder().token(TOKEN).build()
     application.add_handler(CommandHandler("start",start)); application.add_handler(CommandHandler("menu",start)); application.add_handler(CommandHandler("stats",stats))
     application.add_handler(CallbackQueryHandler(on_callback)); application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND,receive_proposal)); application.add_handler(ChatJoinRequestHandler(auto_approve)); application.add_error_handler(error_handler)
+    schedule_collection(application,db,ADMIN_CHAT_ID)
     return application
 
 def main(): build_application().run_polling(allowed_updates=Update.ALL_TYPES)
