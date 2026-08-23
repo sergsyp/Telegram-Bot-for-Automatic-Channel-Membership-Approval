@@ -29,7 +29,31 @@ GUESTS = {
     314: "Иван Титов",
 }
 
-def season_text(season):
+STAT_PLATFORM_LABELS = (
+    ("youtube", "YouTube"),
+    ("vk_video", "VK Видео"),
+    ("rutube", "RuTube"),
+    ("dzen", "Дзен"),
+    ("telegram", "Telegram"),
+)
+
+
+def stats_text(stats):
+    values = [
+        (label, stats[code])
+        for code, label in STAT_PLATFORM_LABELS
+        if code in stats
+    ]
+    if not values:
+        return None
+    parts = [f"{label} {value:,}".replace(",", " ") for label, value in values]
+    total = sum(value for _, value in values)
+    parts.append(f"Всего {total:,} просмотров".replace(",", " "))
+    return " | ".join(parts)
+
+
+def season_text(season, episode_stats=None):
+    episode_stats = episode_stats or {}
     lines=[f"🎙 <b>Сезон {season}</b>"]
     for index,episode in enumerate(PODCASTS[season],1):
         title,description,post_id,*custom_number=episode
@@ -38,10 +62,13 @@ def season_text(season):
         if guest := GUESTS.get(post_id):
             label = "Гости" if "," in guest else "Гость"
             lines.append(f"{label}: {guest}")
+        if stats := stats_text(episode_stats.get(post_id, {})):
+            lines.append(stats)
     return "\n".join(lines)
 
 
-def search_text(query):
+def search_text(query, episode_stats=None):
+    episode_stats = episode_stats or {}
     needle = query.casefold().strip()
     results = []
     for season, episodes in PODCASTS.items():
@@ -60,6 +87,8 @@ def search_text(query):
                  f'<a href="https://t.me/sergsyp/{post_id}">{title}</a>', description]
         if guest:
             block.append(f'{"Гости" if "," in guest else "Гость"}: {guest}')
+        if stats := stats_text(episode_stats.get(post_id, {})):
+            block.append(stats)
         block_text = "\n".join(block)
         if len(current) + len(block_text) + 2 > 3900:
             messages.append(current)

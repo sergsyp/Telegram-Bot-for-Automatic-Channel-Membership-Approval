@@ -9,7 +9,7 @@ os.environ.setdefault("DATABASE_PATH", ":memory:")
 
 from database import Database
 from main import ABOUT_TEXT, CLUB_TEXT, CONTACTS_TEXT, SOCIAL_TEXT, WELCOME_TEXT, build_application, main_menu, podcasts_menu
-from podcasts import GUESTS, PODCASTS, search_text, season_text
+from podcasts import GUESTS, PODCASTS, search_text, season_text, stats_text
 
 
 class BotTests(unittest.TestCase):
@@ -44,6 +44,18 @@ class BotTests(unittest.TestCase):
         broad_results = search_text("1с")
         self.assertGreater(len(broad_results), 1)
         self.assertTrue(all(len(message) <= 4096 for message in broad_results))
+
+    def test_view_stats_format(self):
+        text = stats_text({
+            "youtube": 1240, "vk_video": 980, "rutube": 630,
+            "dzen": 570, "telegram": 1430,
+        })
+        self.assertEqual(
+            text,
+            "YouTube 1 240 | VK Видео 980 | RuTube 630 | Дзен 570 | "
+            "Telegram 1 430 | Всего 4 850 просмотров",
+        )
+        self.assertNotIn("—", text)
 
     def test_email_is_explicit_link(self):
         self.assertIn('href="mailto:s@sypachev.ru"', CONTACTS_TEXT)

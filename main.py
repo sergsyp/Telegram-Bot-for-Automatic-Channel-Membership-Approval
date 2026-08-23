@@ -6,6 +6,8 @@ from telegram.ext import Application, CallbackQueryHandler, ChatJoinRequestHandl
 from config import ADMIN_CHAT_ID, DATABASE_PATH, TOKEN
 from database import Database
 from podcasts import PODCASTS, search_text, season_text
+from publication_links import PUBLICATION_LINKS
+from view_stats import schedule_collection
 
 logging.basicConfig(format="%(asctime)s %(levelname)s %(name)s: %(message)s", level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -91,11 +93,12 @@ async def on_callback(update,context):
     elif action=="podcasts": await query.edit_message_text("🎙 <b>Подкасты «Мир 1С»</b>\n\nВыбери сезон или открой весь каталог:",parse_mode=ParseMode.HTML,reply_markup=podcasts_menu())
     elif action=="all_seasons":
         await query.edit_message_text("📚 <b>Все сезоны подкаста «Мир 1С»</b>\n\nНиже — все выпуски, разделённые по сезонам.",parse_mode=ParseMode.HTML)
+        episode_stats=db.latest_episode_view_stats()
         for season in PODCASTS:
-            await query.message.reply_text(season_text(season),parse_mode=ParseMode.HTML,disable_web_page_preview=True,reply_markup=navigation("podcasts") if season==len(PODCASTS) else None)
+            await query.message.reply_text(season_text(season,episode_stats),parse_mode=ParseMode.HTML,disable_web_page_preview=True,reply_markup=navigation("podcasts") if season==len(PODCASTS) else None)
     elif action.startswith("season:"):
         season=int(action.split(":",1)[1])
-        await query.edit_message_text(season_text(season),parse_mode=ParseMode.HTML,disable_web_page_preview=True,reply_markup=navigation("podcasts"))
+        await query.edit_message_text(season_text(season,db.latest_episode_view_stats()),parse_mode=ParseMode.HTML,disable_web_page_preview=True,reply_markup=navigation("podcasts"))
     elif action=="podcast_search":
         context.user_data["awaiting_podcast_search"]=True
         await query.edit_message_text("🔎 <b>Поиск по подкастам</b>\n\nВведи часть названия, темы или имени гостя.",parse_mode=ParseMode.HTML,reply_markup=navigation("podcasts"))
@@ -115,7 +118,7 @@ async def receive_proposal(update,context):
             db.log_action(update.effective_user.id,"podcast_search_invalid",{"query_length":len(query)},False)
             context.user_data["awaiting_podcast_search"]=True
             await update.message.reply_text("Введи не менее двух символов."); return
-        results=search_text(query)
+        results=search_text(query,db.latest_episode_view_stats())
         db.log_action(update.effective_user.id,"podcast_search",{"query":query,"results":len(results)})
         for index, result in enumerate(results):
             await update.message.reply_text(result,parse_mode=ParseMode.HTML,disable_web_page_preview=True,reply_markup=navigation("podcasts") if index==len(results)-1 else None)
@@ -167,9 +170,11 @@ async def error_handler(update,context):
     logger.exception("Необработанная ошибка",exc_info=context.error)
 
 def build_application():
-    db.initialize(); application=Application.builder().token(TOKEN).build()
+    db.initialize(); db.sync_podcast_catalog(PODCASTS); db.sync_publication_links(PUBLICATION_LINKS)
+    application=Application.builder().token(TOKEN).build()
     application.add_handler(CommandHandler("start",start)); application.add_handler(CommandHandler("menu",start)); application.add_handler(CommandHandler("stats",stats))
     application.add_handler(CallbackQueryHandler(on_callback)); application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND,receive_proposal)); application.add_handler(ChatJoinRequestHandler(auto_approve)); application.add_error_handler(error_handler)
+    schedule_collection(application,db,ADMIN_CHAT_ID)
     return application
 
 def main(): build_application().run_polling(allowed_updates=Update.ALL_TYPES)

@@ -3,6 +3,7 @@ import unittest
 from pathlib import Path
 
 from database import Database
+from podcasts import PODCASTS
 
 
 class DatabaseTest(unittest.TestCase):
@@ -37,6 +38,49 @@ class DatabaseTest(unittest.TestCase):
         legacy.initialize()
         legacy.log_action(1, "menu", {"source": "button"})
         self.assertEqual(legacy.stats(1)["events"], 1)
+
+    def test_syncs_catalog_platforms_and_first_telegram_posts(self):
+        self.db.sync_podcast_catalog(PODCASTS)
+        with self.db.connect() as connection:
+            self.assertEqual(connection.execute("SELECT COUNT(*) FROM platforms").fetchone()[0], 7)
+            self.assertEqual(connection.execute("SELECT COUNT(*) FROM podcast_episodes").fetchone()[0], 56)
+            self.assertEqual(connection.execute("SELECT COUNT(*) FROM episode_publications").fetchone()[0], 56)
+            self.assertEqual(connection.execute(
+                "SELECT type FROM platforms WHERE code='yandex_music'").fetchone()[0], "audio")
+            self.assertEqual(connection.execute(
+                "SELECT stats_status FROM platforms WHERE code='yandex_music'"
+            ).fetchone()[0], "unsupported")
+
+    def test_saves_history_latest_value_and_run_result(self):
+        self.db.sync_podcast_catalog({1: [("Выпуск", "Описание", 999)]})
+        publication = self.db.active_publications()[0]
+        run_id = self.db.start_stats_run(1)
+        self.db.save_publication_stat(run_id, publication["id"], 123, 45)
+        self.assertEqual(self.db.finish_stats_run(run_id, 1, 0), "success")
+        with self.db.connect() as connection:
+            self.assertEqual(connection.execute(
+                "SELECT view_count FROM publication_latest_stats").fetchone()[0], 123)
+            self.assertEqual(connection.execute(
+                "SELECT view_count FROM publication_stats_history").fetchone()[0], 123)
+
+    def test_syncs_approved_external_publication_links(self):
+        self.db.sync_podcast_catalog({1: [("Выпуск", "Описание", 999)]})
+        self.db.sync_publication_links({999: {"youtube": "https://youtu.be/abc123"}})
+        rows = self.db.active_publications()
+        self.assertEqual({row["platform_code"] for row in rows}, {"telegram", "youtube"})
+
+    def test_failed_run_does_not_replace_latest_value(self):
+        self.db.sync_podcast_catalog({1: [("Выпуск", "Описание", 999)]})
+        publication = self.db.active_publications()[0]
+        first = self.db.start_stats_run(1)
+        self.db.save_publication_stat(first, publication["id"], 100, 20)
+        self.db.finish_stats_run(first, 1, 0)
+        failed = self.db.start_stats_run(1)
+        self.db.save_stats_error(failed, publication["id"], 3, "Timeout", "timeout")
+        self.db.finish_stats_run(failed, 0, 1)
+        with self.db.connect() as connection:
+            self.assertEqual(connection.execute(
+                "SELECT view_count FROM publication_latest_stats").fetchone()[0], 100)
 
 
 if __name__ == "__main__":
