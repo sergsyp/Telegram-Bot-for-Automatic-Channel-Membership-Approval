@@ -225,6 +225,23 @@ class Database:
                 ORDER BY p.id, pe.season_number, pe.episode_number
             """)]
 
+    def latest_episode_view_stats(self):
+        """Return the latest available counters grouped by Telegram post ID."""
+        with self.connect() as connection:
+            rows = connection.execute("""
+                SELECT pe.telegram_post_id, p.code, ls.view_count
+                FROM podcast_episodes pe
+                JOIN episode_publications ep ON ep.episode_id=pe.id
+                JOIN platforms p ON p.id=ep.platform_id
+                JOIN publication_latest_stats ls ON ls.publication_id=ep.id
+                WHERE pe.is_active=1 AND ep.is_active=1 AND p.is_active=1
+                  AND p.stats_status='collect' AND ls.source_status='ok'
+            """)
+            result = {}
+            for post_id, platform_code, view_count in rows:
+                result.setdefault(post_id, {})[platform_code] = view_count
+            return result
+
     def start_stats_run(self, planned_count):
         with self.connect() as connection:
             cursor = connection.execute(
