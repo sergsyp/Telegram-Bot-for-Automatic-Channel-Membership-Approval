@@ -8,7 +8,7 @@ os.environ.setdefault("BOT_TOKEN", "123456:TEST_TOKEN_FOR_LOCAL_TESTS_ONLY")
 os.environ.setdefault("DATABASE_PATH", ":memory:")
 
 from database import Database
-from main import ABOUT_TEXT, CLUB_TEXT, CONTACTS_TEXT, SOCIAL_TEXT, WELCOME_TEXT, build_application, main_menu, podcasts_menu
+from main import ABOUT_TEXT, CLUB_TEXT, CONTACTS_TEXT, SOCIAL_TEXT, WELCOME_TEXT, build_application, main_menu, podcasts_menu, _msk_time
 from podcasts import GUESTS, PODCASTS, search_text, season_text, stats_text
 
 
@@ -32,6 +32,13 @@ class BotTests(unittest.TestCase):
 
     def test_main_menu_has_five_sections(self):
         self.assertEqual(len(main_menu().inline_keyboard), 5)
+        admin_menu = main_menu(127626487)
+        self.assertEqual(len(admin_menu.inline_keyboard), 6)
+        self.assertEqual(admin_menu.inline_keyboard[-1][0].callback_data, "admin_collection_status")
+        self.assertFalse(any(
+            button.callback_data == "admin_collection_status"
+            for row in main_menu(42).inline_keyboard for button in row
+        ))
         self.assertEqual(podcasts_menu().inline_keyboard[0][0].callback_data, "all_seasons")
         self.assertTrue(any(button.callback_data == "podcast_search" for row in podcasts_menu().inline_keyboard for button in row))
 
@@ -56,6 +63,9 @@ class BotTests(unittest.TestCase):
             "Telegram 1 430 | Всего 4 850 просмотров",
         )
         self.assertNotIn("—", text)
+
+    def test_collection_time_is_shown_in_moscow_timezone(self):
+        self.assertEqual(_msk_time("2026-08-23 12:00:00"), "23.08.2026 15:00 мск")
 
     def test_email_is_explicit_link(self):
         self.assertIn('href="mailto:s@sypachev.ru"', CONTACTS_TEXT)
