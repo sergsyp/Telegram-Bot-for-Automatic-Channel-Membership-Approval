@@ -3,6 +3,7 @@
 Печатает CSV в stdout. Результат нельзя загружать в базу без ручной проверки.
 """
 import asyncio
+import argparse
 import csv
 import html
 import re
@@ -59,8 +60,9 @@ def candidates(block):
     return found
 
 
-async def main():
-    writer = csv.writer(sys.stdout)
+async def main(output):
+    stream = output.open("w", encoding="utf-8", newline="") if output else sys.stdout
+    writer = csv.writer(stream)
     writer.writerow(("telegram_post_id", "season", "episode", "title", "platform", "url", "approved"))
     async with httpx.AsyncClient(follow_redirects=True, timeout=20,
                                  headers={"User-Agent": "Mir1CLinkDiscovery/1.0"}) as client:
@@ -73,7 +75,12 @@ async def main():
                 for platform, url in links.items():
                     writer.writerow((post_id, season, number, title, platform, url, ""))
                 await asyncio.sleep(0.2)
+    if output:
+        stream.close()
 
 
 if __name__ == "__main__":
-    asyncio.run(main())
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--output", type=__import__("pathlib").Path)
+    args = parser.parse_args()
+    asyncio.run(main(args.output))
