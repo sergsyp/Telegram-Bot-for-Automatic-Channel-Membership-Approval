@@ -62,8 +62,15 @@ PROPOSAL_TEXT = """🎤 <b>Попасть на подкаст</b>
 
 Напиши одним сообщением, о чём хочешь рассказать и почему это будет интересно слушателям. Я передам твоё предложение Сергею 👇"""
 
-def main_menu():
-    return InlineKeyboardMarkup([[InlineKeyboardButton("🎙 Подкасты",callback_data="podcasts")],[InlineKeyboardButton("👥 Клуб «Мир 1С»",callback_data="club")],[InlineKeyboardButton("👤 Обо мне",callback_data="about")],[InlineKeyboardButton("🎤 Попасть на подкаст",callback_data="proposal")],[InlineKeyboardButton("✉️ Контакты",callback_data="contacts")]])
+def main_menu(user_id=None):
+    rows=[[InlineKeyboardButton("🎙 Подкасты",callback_data="podcasts")],
+          [InlineKeyboardButton("👥 Клуб «Мир 1С»",callback_data="club")],
+          [InlineKeyboardButton("👤 Обо мне",callback_data="about")],
+          [InlineKeyboardButton("🎤 Попасть на подкаст",callback_data="proposal")],
+          [InlineKeyboardButton("✉️ Контакты",callback_data="contacts")]]
+    if user_id == ADMIN_CHAT_ID:
+        rows.append([InlineKeyboardButton("🛠 Состояние загрузки",callback_data="admin_collection_status")])
+    return InlineKeyboardMarkup(rows)
 
 def navigation(back=None):
     buttons=[]
@@ -84,14 +91,14 @@ async def start(update,context):
     context.user_data.pop("awaiting_podcast_search",None)
     db.upsert_user(update.effective_user)
     db.log_action(update.effective_user.id,"command_start",{"command":update.message.text.split()[0]})
-    await update.message.reply_text(WELCOME_TEXT,reply_markup=main_menu())
+    await update.message.reply_text(WELCOME_TEXT,reply_markup=main_menu(update.effective_user.id))
 
 async def on_callback(update,context):
     query=update.callback_query; await query.answer(); action=query.data
     db.upsert_user(update.effective_user); db.log_action(update.effective_user.id,action)
     context.user_data.pop("awaiting_proposal",None)
     context.user_data.pop("awaiting_podcast_search",None)
-    if action=="menu": await query.edit_message_text(WELCOME_TEXT,reply_markup=main_menu())
+    if action=="menu": await query.edit_message_text(WELCOME_TEXT,reply_markup=main_menu(update.effective_user.id))
     elif action=="podcasts": await query.edit_message_text("🎙 <b>Подкасты «Мир 1С»</b>\n\nВыбери сезон или открой весь каталог:",parse_mode=ParseMode.HTML,reply_markup=podcasts_menu())
     elif action=="all_seasons":
         await query.edit_message_text("📚 <b>Все сезоны подкаста «Мир 1С»</b>\n\nНиже — все выпуски, разделённые по сезонам.",parse_mode=ParseMode.HTML)
@@ -112,6 +119,13 @@ async def on_callback(update,context):
     elif action=="proposal":
         context.user_data["awaiting_proposal"]=True
         await query.edit_message_text(PROPOSAL_TEXT,parse_mode=ParseMode.HTML,reply_markup=navigation())
+    elif action=="admin_collection_status":
+        if update.effective_user.id != ADMIN_CHAT_ID:
+            db.log_action(update.effective_user.id,"callback_collection_status_denied",success=False)
+            return
+        db.log_action(update.effective_user.id,"callback_collection_status")
+        await query.edit_message_text(collection_status_text(),parse_mode=ParseMode.HTML,
+                                      reply_markup=navigation())
 
 async def receive_proposal(update,context):
     if context.user_data.pop("awaiting_podcast_search",None):
@@ -137,10 +151,10 @@ async def receive_proposal(update,context):
     except Exception:
         db.log_action(user.id,"podcast_proposal_delivery",{"proposal_id":proposal_id},False)
         logger.exception("Не удалось переслать предложение %s",proposal_id)
-        await update.message.reply_text("Не удалось передать предложение. Попробуй ещё раз немного позже.",reply_markup=main_menu()); return
+        await update.message.reply_text("Не удалось передать предложение. Попробуй ещё раз немного позже.",reply_markup=main_menu(update.effective_user.id)); return
     db.log_action(user.id,"podcast_proposal_delivery",{"proposal_id":proposal_id},True)
     context.user_data.pop("awaiting_proposal",None)
-    await update.message.reply_text("✅ Спасибо! Предложение передано Сергею.",reply_markup=main_menu())
+    await update.message.reply_text("✅ Спасибо! Предложение передано Сергею.",reply_markup=main_menu(update.effective_user.id))
 
 async def auto_approve(update,context):
     request=update.chat_join_request
@@ -174,10 +188,7 @@ def _msk_time(value):
         parsed=parsed.replace(tzinfo=timezone.utc)
     return parsed.astimezone(ZoneInfo("Europe/Moscow")).strftime("%d.%m.%Y %H:%M мск")
 
-async def collection_status(update,context):
-    if update.effective_user.id != ADMIN_CHAT_ID:
-        db.log_action(update.effective_user.id,"command_collection_status_denied",success=False)
-        return
+def collection_status_text():
     report=db.collection_status(); run=report["last_run"]
     if not run:
         text=("📥 <b>Загрузка статистики</b>\n\nЗапуски ещё не выполнялись.\n"
@@ -213,8 +224,14 @@ async def collection_status(update,context):
                              f"{item['success_count']}/{item['planned_count']} | "
                              f"ошибок {item['error_count']}")
         text="\n".join(lines)
+    return text[:4096]
+
+async def collection_status(update,context):
+    if update.effective_user.id != ADMIN_CHAT_ID:
+        db.log_action(update.effective_user.id,"command_collection_status_denied",success=False)
+        return
     db.log_action(update.effective_user.id,"command_collection_status")
-    await update.message.reply_text(text[:4096],parse_mode=ParseMode.HTML)
+    await update.message.reply_text(collection_status_text(),parse_mode=ParseMode.HTML)
 
 async def error_handler(update,context):
     user_id=update.effective_user.id if update and update.effective_user else None

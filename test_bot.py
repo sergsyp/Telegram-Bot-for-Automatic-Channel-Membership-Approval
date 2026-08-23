@@ -32,6 +32,13 @@ class BotTests(unittest.TestCase):
 
     def test_main_menu_has_five_sections(self):
         self.assertEqual(len(main_menu().inline_keyboard), 5)
+        admin_menu = main_menu(127626487)
+        self.assertEqual(len(admin_menu.inline_keyboard), 6)
+        self.assertEqual(admin_menu.inline_keyboard[-1][0].callback_data, "admin_collection_status")
+        self.assertFalse(any(
+            button.callback_data == "admin_collection_status"
+            for row in main_menu(42).inline_keyboard for button in row
+        ))
         self.assertEqual(podcasts_menu().inline_keyboard[0][0].callback_data, "all_seasons")
         self.assertTrue(any(button.callback_data == "podcast_search" for row in podcasts_menu().inline_keyboard for button in row))
 
