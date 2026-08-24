@@ -60,9 +60,13 @@ class BotTests(unittest.TestCase):
         self.assertEqual(
             text,
             "YouTube 1 240 | VK Видео 980 | RuTube 630 | Дзен 570 | "
-            "Telegram 1 430 | Всего 4 850 просмотров",
+            "Всего 3 420 просмотров",
         )
+        self.assertNotIn("Telegram", text)
         self.assertNotIn("—", text)
+
+    def test_telegram_views_are_not_shown_or_included_in_total(self):
+        self.assertIsNone(stats_text({"telegram": 1430}))
 
     def test_collection_time_is_shown_in_moscow_timezone(self):
         self.assertEqual(_msk_time("2026-08-23 12:00:00"), "23.08.2026 15:00 мск")
