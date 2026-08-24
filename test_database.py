@@ -4,6 +4,7 @@ from pathlib import Path
 
 from database import Database
 from podcasts import PODCASTS
+from publication_links import PUBLICATION_LINKS
 
 
 class DatabaseTest(unittest.TestCase):
@@ -68,6 +69,22 @@ class DatabaseTest(unittest.TestCase):
         self.db.sync_publication_links({999: {"youtube": "https://youtu.be/abc123"}})
         rows = self.db.active_publications()
         self.assertEqual({row["platform_code"] for row in rows}, {"telegram", "youtube"})
+
+    def test_vk_video_catalog_links_are_complete_and_unique(self):
+        expected = {
+            104: "https://vkvideo.ru/video-227129566_456239019",
+            107: "https://vkvideo.ru/video-227129566_456239017",
+            109: "https://vkvideo.ru/video-227129566_456239020",
+            112: "https://vkvideo.ru/video-227129566_456239026",
+            115: "https://vkvideo.ru/video-227129566_456239060",
+            121: "https://vkvideo.ru/video-227129566_456239028",
+        }
+        self.assertEqual(
+            {post_id: PUBLICATION_LINKS[post_id]["vk_video"] for post_id in expected},
+            expected,
+        )
+        vk_urls = [links["vk_video"] for links in PUBLICATION_LINKS.values() if "vk_video" in links]
+        self.assertEqual(len(vk_urls), len(set(vk_urls)))
 
     def test_failed_run_does_not_replace_latest_value(self):
         self.db.sync_podcast_catalog({1: [("Выпуск", "Описание", 999)]})

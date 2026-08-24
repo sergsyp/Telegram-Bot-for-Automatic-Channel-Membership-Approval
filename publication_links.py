@@ -6,14 +6,30 @@ Telegram-ссылки создаются автоматически из podcast
 """
 
 PUBLICATION_LINKS = {
-    104: {"youtube": "https://youtu.be/YajWXqZ2QDw"},
-    107: {"youtube": "https://youtu.be/GLuir1XNCjA"},
-    109: {"youtube": "https://youtu.be/kwx8KJ5aig8"},
-    112: {"youtube": "https://youtu.be/EAZvhLhImec"},
-    115: {"youtube": "https://youtu.be/jytfjmeXvh8"},
+    104: {
+        "vk_video": "https://vkvideo.ru/video-227129566_456239019",
+        "youtube": "https://youtu.be/YajWXqZ2QDw",
+    },
+    107: {
+        "vk_video": "https://vkvideo.ru/video-227129566_456239017",
+        "youtube": "https://youtu.be/GLuir1XNCjA",
+    },
+    109: {
+        "vk_video": "https://vkvideo.ru/video-227129566_456239020",
+        "youtube": "https://youtu.be/kwx8KJ5aig8",
+    },
+    112: {
+        "vk_video": "https://vkvideo.ru/video-227129566_456239026",
+        "youtube": "https://youtu.be/EAZvhLhImec",
+    },
+    115: {
+        "vk_video": "https://vkvideo.ru/video-227129566_456239060",
+        "youtube": "https://youtu.be/jytfjmeXvh8",
+    },
     121: {
         "dzen": "https://dzen.ru/video/watch/66bf4eea3823e4641d4bfd11",
         "rutube": "https://rutube.ru/video/031c851599f8d1fd4df36362c6f108db/",
+        "vk_video": "https://vkvideo.ru/video-227129566_456239028",
         "youtube": "https://youtu.be/CrgekM8X15g",
     },
     125: {
