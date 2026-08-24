@@ -34,7 +34,6 @@ STAT_PLATFORM_LABELS = (
     ("vk_video", "VK Видео"),
     ("rutube", "RuTube"),
     ("dzen", "Дзен"),
-    ("telegram", "Telegram"),
 )
 
 
