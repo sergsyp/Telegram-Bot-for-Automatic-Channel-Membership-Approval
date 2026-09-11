@@ -6,5 +6,5 @@
 ## 2. Verification and test deployment
 
 - [x] 2.1 Run the full unit suite and OpenSpec validation successfully
-- [ ] 2.2 Commit and push one cohesive change to `test`, then verify BotHost deploys the test branch without errors
-- [ ] 2.3 Run the collector in the test container and verify all five season-3 episodes render YouTube and total counters
+- [x] 2.2 Commit and push the cohesive implementation to `test`, then verify BotHost deploys the test branch without errors
+- [x] 2.3 Run the collector in the test container and verify all five season-3 episodes render YouTube and total counters
