@@ -6,6 +6,21 @@ Telegram-ссылки создаются автоматически из podcast
 """
 
 PUBLICATION_LINKS = {
+    64: {
+        "youtube": "https://youtu.be/e53bitBmVOk",
+    },
+    69: {
+        "youtube": "https://youtu.be/zqQozVSn-fo",
+    },
+    74: {
+        "youtube": "https://youtu.be/GkvvdkwxJog",
+    },
+    79: {
+        "youtube": "https://youtu.be/IRfzZtO91Yw",
+    },
+    81: {
+        "youtube": "https://youtu.be/uXWOXO6SI3A",
+    },
     104: {
         "vk_video": "https://vkvideo.ru/video-227129566_456239019",
         "youtube": "https://youtu.be/YajWXqZ2QDw",
