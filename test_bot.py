@@ -68,6 +68,16 @@ class BotTests(unittest.TestCase):
     def test_telegram_views_are_not_shown_or_included_in_total(self):
         self.assertIsNone(stats_text({"telegram": 1430}))
 
+    def test_season_three_renders_available_view_stats_for_every_episode(self):
+        episode_stats = {
+            episode[2]: {"youtube": 1000 + index}
+            for index, episode in enumerate(PODCASTS[3], 1)
+        }
+        text = season_text(3, episode_stats)
+        self.assertEqual(text.count("YouTube "), len(PODCASTS[3]))
+        self.assertEqual(text.count("Всего "), len(PODCASTS[3]))
+        self.assertLessEqual(len(text), 4096)
+
     def test_collection_time_is_shown_in_moscow_timezone(self):
         self.assertEqual(_msk_time("2026-08-23 12:00:00"), "23.08.2026 15:00 мск")
 

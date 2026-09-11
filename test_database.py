@@ -86,6 +86,25 @@ class DatabaseTest(unittest.TestCase):
         vk_urls = [links["vk_video"] for links in PUBLICATION_LINKS.values() if "vk_video" in links]
         self.assertEqual(len(vk_urls), len(set(vk_urls)))
 
+    def test_season_three_youtube_links_are_complete_and_unique(self):
+        expected = {
+            64: "https://youtu.be/e53bitBmVOk",
+            69: "https://youtu.be/zqQozVSn-fo",
+            74: "https://youtu.be/GkvvdkwxJog",
+            79: "https://youtu.be/IRfzZtO91Yw",
+            81: "https://youtu.be/uXWOXO6SI3A",
+        }
+        self.assertEqual(
+            {post_id: PUBLICATION_LINKS[post_id]["youtube"] for post_id in expected},
+            expected,
+        )
+        youtube_urls = [
+            links["youtube"]
+            for links in PUBLICATION_LINKS.values()
+            if "youtube" in links
+        ]
+        self.assertEqual(len(youtube_urls), len(set(youtube_urls)))
+
     def test_failed_run_does_not_replace_latest_value(self):
         self.db.sync_podcast_catalog({1: [("Выпуск", "Описание", 999)]})
         publication = self.db.active_publications()[0]
