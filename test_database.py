@@ -44,8 +44,8 @@ class DatabaseTest(unittest.TestCase):
         self.db.sync_podcast_catalog(PODCASTS)
         with self.db.connect() as connection:
             self.assertEqual(connection.execute("SELECT COUNT(*) FROM platforms").fetchone()[0], 7)
-            self.assertEqual(connection.execute("SELECT COUNT(*) FROM podcast_episodes").fetchone()[0], 56)
-            self.assertEqual(connection.execute("SELECT COUNT(*) FROM episode_publications").fetchone()[0], 56)
+            self.assertEqual(connection.execute("SELECT COUNT(*) FROM podcast_episodes").fetchone()[0], 57)
+            self.assertEqual(connection.execute("SELECT COUNT(*) FROM episode_publications").fetchone()[0], 57)
             self.assertEqual(connection.execute(
                 "SELECT type FROM platforms WHERE code='yandex_music'").fetchone()[0], "audio")
             self.assertEqual(connection.execute(
@@ -104,6 +104,15 @@ class DatabaseTest(unittest.TestCase):
             if "youtube" in links
         ]
         self.assertEqual(len(youtube_urls), len(set(youtube_urls)))
+
+    def test_season_twelve_first_episode_links_are_complete(self):
+        self.assertEqual(PUBLICATION_LINKS[353], {
+            "dzen": "https://dzen.ru/video/watch/6ab5115836926d6212ed3251",
+            "rutube": "https://rutube.ru/video/b41c7d33bbcc34f0feb9bc53d131af3b/",
+            "vk_video": "https://vkvideo.ru/video-227129566_456239086",
+            "yandex_music": "https://music.yandex.ru/album/27600967/track/156259791",
+            "youtube": "https://youtu.be/liRdiVqP8Hs",
+        })
 
     def test_failed_run_does_not_replace_latest_value(self):
         self.db.sync_podcast_catalog({1: [("Выпуск", "Описание", 999)]})
