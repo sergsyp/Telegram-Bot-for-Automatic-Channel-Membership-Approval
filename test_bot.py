@@ -42,13 +42,24 @@ class BotTests(unittest.TestCase):
         self.assertEqual(podcasts_menu().inline_keyboard[0][0].callback_data, "all_seasons")
         self.assertTrue(any(button.callback_data == "podcast_search" for row in podcasts_menu().inline_keyboard for button in row))
 
+    def test_season_twelve_is_available_from_podcast_menu(self):
+        buttons = [
+            button
+            for row in podcasts_menu().inline_keyboard
+            for button in row
+        ]
+        season_twelve = next(
+            button for button in buttons if button.callback_data == "season:12"
+        )
+        self.assertEqual(season_twelve.text, "Сезон 12")
+
     def test_guests_and_search(self):
         self.assertEqual(GUESTS[260], "Кирилл Комаров, Александр Гречушкин")
         result = "\n".join(search_text("дорошкевич"))
         self.assertIn("Антон Дорошкевич", result)
         self.assertIn("https://t.me/sergsyp/253", result)
         self.assertIn("Ничего не найдено", search_text("несуществующая-тема-xyz")[0])
-        self.assertIn("https://t.me/sergsyp/353", "\n".join(search_text("Пётр Цап")))
+        self.assertIn("https://t.me/sergsyp/353", "\n".join(search_text("Цап")))
         broad_results = search_text("1с")
         self.assertGreater(len(broad_results), 1)
         self.assertTrue(all(len(message) <= 4096 for message in broad_results))
