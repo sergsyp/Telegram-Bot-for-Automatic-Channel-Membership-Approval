@@ -6,6 +6,12 @@ Telegram-ссылки создаются автоматически из podcast
 """
 
 PUBLICATION_LINKS = {
+    359: {
+        "dzen": "https://dzen.ru/video/watch/6acdd45c90c40831fb01f3ea",
+        "rutube": "https://rutube.ru/video/b13d8b9605accc8d5f8993ad0c333d10/",
+        "vk_video": "https://vkvideo.ru/video-227129566_456239087",
+        "youtube": "https://youtu.be/qaP6pg7o9P0",
+    },
     353: {
         "dzen": "https://dzen.ru/video/watch/6ab5115836926d6212ed3251",
         "rutube": "https://rutube.ru/video/b41c7d33bbcc34f0feb9bc53d131af3b/",

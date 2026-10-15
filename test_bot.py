@@ -15,8 +15,8 @@ from podcasts import GUESTS, PODCASTS, search_text, season_text, stats_text
 class BotTests(unittest.TestCase):
     def test_catalog_is_complete(self):
         self.assertEqual(list(PODCASTS), list(range(1, 13)))
-        self.assertEqual(sum(len(items) for items in PODCASTS.values()), 57)
-        self.assertEqual([len(PODCASTS[i]) for i in range(1, 13)], [5]*8+[6,5,5,1])
+        self.assertEqual(sum(len(items) for items in PODCASTS.values()), 58)
+        self.assertEqual([len(PODCASTS[i]) for i in range(1, 13)], [5]*8+[6,5,5,2])
 
     def test_season_messages_fit_telegram_limit(self):
         for season in PODCASTS:
@@ -60,6 +60,7 @@ class BotTests(unittest.TestCase):
         self.assertIn("https://t.me/sergsyp/253", result)
         self.assertIn("Ничего не найдено", search_text("несуществующая-тема-xyz")[0])
         self.assertIn("https://t.me/sergsyp/353", "\n".join(search_text("Цап")))
+        self.assertIn("https://t.me/sergsyp/359", "\n".join(search_text("Чегодаев")))
         broad_results = search_text("1с")
         self.assertGreater(len(broad_results), 1)
         self.assertTrue(all(len(message) <= 4096 for message in broad_results))
