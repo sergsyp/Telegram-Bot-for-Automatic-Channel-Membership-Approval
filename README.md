@@ -121,6 +121,10 @@ VK_SERVICE_TOKEN=<сервисный ключ приложения VK>
 ARCHIVE_GITHUB_TOKEN (через защищённое хранилище), ARCHIVE_GITHUB_REPOSITORY,
 ARCHIVE_GITHUB_BRANCH=communications-archive-test и ARCHIVE_DATABASE_PATH.
 Выгрузка повторяется каждые 300 секунд; без токена сообщения остаются в SQLite.
+Если GitHub отклонит токен (срок действия, отзыв или права), бот один раз за
+эпизод отправит владельцу понятное сообщение в личный чат. Повторные попытки
+не спамят даже после перезапуска; при восстановлении доступа бот сообщит об этом
+и выгрузит накопленные сообщения. Ошибки лимита GitHub не считаются истечением.
 Путь файлов: communications/telegram/<group>--<chat-id>/<topic>--<topic-id>/YYYY-MM-DD.md.
 От архивных файлов не требуются README или OpenSpec. Production-бот и основная
 ветка communications-archive ждут отдельного одобрения Сергея после испытаний.

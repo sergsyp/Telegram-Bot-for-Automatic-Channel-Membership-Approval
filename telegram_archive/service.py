@@ -12,7 +12,7 @@ from telegram.constants import ChatMemberStatus
 from telegram.ext import ContextTypes
 
 from .database import ArchiveDatabase, StoredMessage
-from .github import GitHubContentsClient
+from .github import GitHubAuthorizationError, GitHubContentsClient
 from .render import archive_path, content_hash, render_markdown, slugify
 from .security import contains_credential
 
@@ -171,14 +171,35 @@ class ArchiveService:
     async def export_job(self, context: ContextTypes.DEFAULT_TYPE) -> None:
         if not self.github:
             logger.warning("ARCHIVE_GITHUB_TOKEN missing; messages remain in local SQLite")
+            await self._notify_token_problem(context, "missing")
             return
         try:
             count = await self.export_once()
+            if self.database.clear_alert("github_token"):
+                await context.bot.send_message(self.settings.owner_id, "Архив Telegram: доступ к GitHub восстановлен, выгрузка снова работает.")
             while self._newly_blocked:
                 path = self._newly_blocked[0]
                 await context.bot.send_message(self.settings.owner_id, f"Экспорт архива приостановлен: в тексте обнаружены данные, похожие на секрет. Файл: {path}. Данные остались в SQLite.")
                 self._newly_blocked.pop(0)
             if count:
                 logger.info("Archived %s Telegram files", count)
+        except GitHubAuthorizationError:
+            logger.warning("Telegram archive GitHub authorization failed; messages remain in SQLite")
+            await self._notify_token_problem(context, "rejected")
         except Exception:
             logger.exception("Telegram archive export failed; retrying at next interval")
+
+    async def _notify_token_problem(self, context: ContextTypes.DEFAULT_TYPE, reason: str) -> None:
+        if self.database.has_alert("github_token"):
+            return
+        message = ("Архив Telegram: токен GitHub не настроен. Новые сообщения сохранены в базе, "
+                   "но не выгружаются. Добавь новый токен для архива."
+                   if reason == "missing" else
+                   "Архив Telegram: GitHub отклонил токен (он мог истечь, быть отозван или лишиться прав). "
+                   "Сообщения остаются в базе и будут выгружены после восстановления доступа. "
+                   "Проверь срок действия и права токена; при необходимости продли или замени его.")
+        try:
+            await context.bot.send_message(self.settings.owner_id, message)
+            self.database.mark_alert("github_token")
+        except Exception:
+            logger.exception("Could not notify owner of archive GitHub token problem")

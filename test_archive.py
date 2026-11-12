@@ -6,6 +6,7 @@ from datetime import datetime, timezone
 from types import SimpleNamespace
 
 from telegram_archive.service import ArchiveService, ArchiveSettings
+from telegram_archive.github import GitHubAuthorizationError
 
 
 CHAT = -1001234567890
@@ -113,3 +114,33 @@ class ArchiveTests(unittest.TestCase):
             asyncio.run(self.service.export_once())
         self.assertEqual(asyncio.run(self.service.export_once()), 1)
         self.assertEqual(asyncio.run(self.service.export_once()), 0)
+
+    def test_rejected_token_alert_once_across_restart_and_recovery(self):
+        self.approve()
+        self.service.store_message(message(5, "Текст ожидает выгрузки"))
+        async def rejected():
+            raise GitHubAuthorizationError("GitHub authorization failed: HTTP 401")
+        self.github.ensure_branch = rejected
+        asyncio.run(self.service.export_job(self.context))
+        asyncio.run(self.service.export_job(self.context))
+        self.assertEqual(len(self.sent), 2)  # approval + one private alert
+        self.assertIn("истечь", self.sent[-1][0][1])
+        self.assertEqual(self.service.database.connection.execute("SELECT count(*) FROM messages").fetchone()[0], 1)
+
+        restarted = ArchiveService(self.service.settings)
+        self.addCleanup(restarted.database.close)
+        restarted.github = self.github
+        asyncio.run(restarted.export_job(self.context))
+        self.assertEqual(len(self.sent), 2)
+        self.github.ensure_branch = FakeGitHub().ensure_branch
+        asyncio.run(restarted.export_job(self.context))
+        self.assertEqual(len(self.sent), 3)
+        self.assertIn("восстановлен", self.sent[-1][0][1])
+        self.assertEqual(len(self.github.files), 1)
+
+    def test_missing_token_alert_only_once(self):
+        self.service.github = None
+        asyncio.run(self.service.export_job(self.context))
+        asyncio.run(self.service.export_job(self.context))
+        self.assertEqual(len(self.sent), 1)
+        self.assertIn("не настроен", self.sent[0][0][1])
