@@ -107,25 +107,6 @@ class ArchiveService:
         if self.is_approved(chat_id) and name.strip():
             self.database.upsert_topic(chat_id, thread_id, name.strip(), slugify(name))
 
-    async def topic_name(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-        message = update.effective_message
-        if not message or not message.message_thread_id or not self.is_approved(message.chat_id):
-            return
-        user = update.effective_user
-        if not user:
-            return
-        member = await context.bot.get_chat_member(message.chat_id, user.id)
-        if member.status not in {ChatMemberStatus.ADMINISTRATOR, ChatMemberStatus.OWNER}:
-            await message.reply_text("Название темы может задать администратор.")
-            return
-        name = " ".join(context.args).strip()
-        if not name:
-            await message.reply_text("Укажи название: /topic_name Название темы")
-            return
-        self.register_topic(message.chat_id, message.message_thread_id, name)
-        sent = await message.reply_text(f"Название темы сохранено: {name}")
-        self.store_message(sent)
-
     def store_message(self, message) -> bool:
         if not self.is_approved(message.chat_id):
             return False
@@ -143,8 +124,8 @@ class ArchiveService:
             thread_id = 1
         if thread_id is None:
             return False
-        if thread_id == 1 and not self.database.topic(message.chat_id, 1):
-            self.register_topic(message.chat_id, 1, "Общая")
+        if not self.database.topic(message.chat_id, thread_id):
+            self.register_topic(message.chat_id, thread_id, "Общая" if thread_id == 1 else f"Тема {thread_id}")
         local = message.date.replace(tzinfo=message.date.tzinfo or timezone.utc).astimezone(self.zone)
         user = message.from_user
         name = user.full_name if user else (message.sender_chat.title if message.sender_chat else "Неизвестный автор")
