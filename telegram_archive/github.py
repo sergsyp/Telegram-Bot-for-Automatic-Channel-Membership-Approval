@@ -11,6 +11,10 @@ class GitHubError(RuntimeError):
     pass
 
 
+class GitHubAuthorizationError(GitHubError):
+    """Token rejected or lacking access; do not include the token in errors."""
+
+
 @dataclass
 class GitHubContentsClient:
     token: str
@@ -31,6 +35,11 @@ class GitHubContentsClient:
             async with session.request(method, url, **kwargs) as response:
                 payload = await response.json(content_type=None)
                 if response.status not in expected:
+                    if response.status == 401 or (response.status == 403 and
+                        response.headers.get("X-RateLimit-Remaining") != "0" and
+                        not response.headers.get("Retry-After") and
+                        "rate limit" not in str(payload.get("message", "")).lower()):
+                        raise GitHubAuthorizationError(f"GitHub authorization failed: HTTP {response.status}")
                     raise GitHubError(f"GitHub API returned {response.status}: {payload.get('message', 'unknown error')}")
                 return payload, response.status
 

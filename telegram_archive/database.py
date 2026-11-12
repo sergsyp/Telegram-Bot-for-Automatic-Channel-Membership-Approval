@@ -61,6 +61,10 @@ class ArchiveDatabase:
                 content_hash TEXT NOT NULL,
                 exported_at TEXT NOT NULL
             );
+            CREATE TABLE IF NOT EXISTS archive_alerts (
+                key TEXT PRIMARY KEY,
+                updated_at TEXT NOT NULL
+            );
             CREATE TABLE IF NOT EXISTS telegram_groups (
                 chat_id INTEGER PRIMARY KEY,
                 title TEXT NOT NULL,
@@ -183,6 +187,19 @@ class ArchiveDatabase:
             (path, content_hash, datetime.now().astimezone().isoformat()),
         )
         self.connection.commit()
+
+    def has_alert(self, key: str) -> bool:
+        return self.connection.execute("SELECT 1 FROM archive_alerts WHERE key=?", (key,)).fetchone() is not None
+
+    def mark_alert(self, key: str) -> None:
+        self.connection.execute("INSERT OR REPLACE INTO archive_alerts(key,updated_at) VALUES (?,?)",
+                                (key, datetime.now().astimezone().isoformat()))
+        self.connection.commit()
+
+    def clear_alert(self, key: str) -> bool:
+        cursor = self.connection.execute("DELETE FROM archive_alerts WHERE key=?", (key,))
+        self.connection.commit()
+        return cursor.rowcount > 0
 
     def close(self) -> None:
         self.connection.close()
