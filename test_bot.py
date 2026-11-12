@@ -1,4 +1,5 @@
 import os
+import asyncio
 import sqlite3
 import tempfile
 import unittest
@@ -6,9 +7,10 @@ from types import SimpleNamespace
 
 os.environ.setdefault("BOT_TOKEN", "123456:TEST_TOKEN_FOR_LOCAL_TESTS_ONLY")
 os.environ.setdefault("DATABASE_PATH", ":memory:")
+os.environ.setdefault("ARCHIVE_DATABASE_PATH", ":memory:")
 
 from database import Database
-from main import ABOUT_TEXT, CLUB_TEXT, CONTACTS_TEXT, SOCIAL_TEXT, WELCOME_TEXT, build_application, main_menu, podcasts_menu, _msk_time
+from main import ABOUT_TEXT, CLUB_TEXT, CONTACTS_TEXT, SOCIAL_TEXT, WELCOME_TEXT, auto_approve, build_application, main_menu, podcasts_menu, _msk_time
 from podcasts import GUESTS, PODCASTS, search_text, season_text, stats_text
 
 
@@ -101,7 +103,20 @@ class BotTests(unittest.TestCase):
     def test_application_registers_all_handler_groups(self):
         app = build_application()
         names = {handler.__class__.__name__ for handler in app.handlers[0]}
-        self.assertEqual(names, {"CommandHandler", "CallbackQueryHandler", "MessageHandler", "ChatJoinRequestHandler"})
+        self.assertEqual(names, {"CommandHandler", "CallbackQueryHandler", "MessageHandler", "ChatJoinRequestHandler", "ChatMemberHandler"})
+
+    def test_new_group_join_requests_are_not_auto_approved(self):
+        approved = []
+        async def approve():
+            approved.append(True)
+        request = SimpleNamespace(chat=SimpleNamespace(id=-1001234567890), approve=approve)
+        old = os.environ.pop("AUTO_APPROVE_CHAT_IDS", None)
+        try:
+            asyncio.run(auto_approve(SimpleNamespace(chat_join_request=request), None))
+        finally:
+            if old is not None:
+                os.environ["AUTO_APPROVE_CHAT_IDS"] = old
+        self.assertEqual(approved, [])
 
     def test_database_persists_user_proposal_and_audit(self):
         with tempfile.TemporaryDirectory() as directory:

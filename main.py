@@ -1,19 +1,23 @@
 import logging
+import os
+from pathlib import Path
 from datetime import datetime, timezone
 from html import escape
 from zoneinfo import ZoneInfo
 from telegram import InlineKeyboardButton, InlineKeyboardMarkup, Update
 from telegram.constants import ParseMode
-from telegram.ext import Application, CallbackQueryHandler, ChatJoinRequestHandler, CommandHandler, ContextTypes, MessageHandler, filters
+from telegram.ext import Application, CallbackQueryHandler, ChatJoinRequestHandler, ChatMemberHandler, CommandHandler, ContextTypes, MessageHandler, filters
 from config import ADMIN_CHAT_ID, DATABASE_PATH, TOKEN
 from database import Database
 from podcasts import PODCASTS, search_text, season_text
 from publication_links import PUBLICATION_LINKS
 from view_stats import schedule_collection
+from telegram_archive.service import ArchiveService, ArchiveSettings
 
 logging.basicConfig(format="%(asctime)s %(levelname)s %(name)s: %(message)s", level=logging.INFO)
 logger = logging.getLogger(__name__)
 db = Database(DATABASE_PATH)
+archive = ArchiveService(ArchiveSettings.from_env(ADMIN_CHAT_ID, str(Path(DATABASE_PATH).with_name("archive-test.db"))))
 
 WELCOME_TEXT = """Привет! Я бот проекта «Мир 1С» 👋
 
@@ -94,7 +98,11 @@ async def start(update,context):
     await update.message.reply_text(WELCOME_TEXT,reply_markup=main_menu(update.effective_user.id))
 
 async def on_callback(update,context):
-    query=update.callback_query; await query.answer(); action=query.data
+    query=update.callback_query; action=query.data
+    if action.startswith("archive:"):
+        await archive.decision(update,context)
+        return
+    await query.answer()
     db.upsert_user(update.effective_user); db.log_action(update.effective_user.id,action)
     context.user_data.pop("awaiting_proposal",None)
     context.user_data.pop("awaiting_podcast_search",None)
@@ -158,6 +166,10 @@ async def receive_proposal(update,context):
 
 async def auto_approve(update,context):
     request=update.chat_join_request
+    approved_ids={int(value) for value in os.getenv("AUTO_APPROVE_CHAT_IDS", "").split(",") if value.strip()}
+    if request.chat.id not in approved_ids:
+        logger.info("Join request not auto-approved in unlisted chat %s",request.chat.id)
+        return
     try:
         await request.approve(); db.log_action(request.from_user.id,"join_request_approved",{"chat_id":request.chat.id})
     except Exception:
@@ -241,9 +253,13 @@ async def error_handler(update,context):
 def build_application():
     db.initialize(); db.sync_podcast_catalog(PODCASTS); db.sync_publication_links(PUBLICATION_LINKS)
     application=Application.builder().token(TOKEN).build()
+    application.add_handler(MessageHandler(filters.ChatType.GROUPS,archive.incoming),group=-1)
+    application.add_handler(ChatMemberHandler(archive.membership,ChatMemberHandler.MY_CHAT_MEMBER))
+    application.add_handler(CommandHandler("topic_name",archive.topic_name))
     application.add_handler(CommandHandler("start",start)); application.add_handler(CommandHandler("menu",start)); application.add_handler(CommandHandler("stats",stats)); application.add_handler(CommandHandler("collection_status",collection_status))
     application.add_handler(CallbackQueryHandler(on_callback)); application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND,receive_proposal)); application.add_handler(ChatJoinRequestHandler(auto_approve)); application.add_error_handler(error_handler)
     schedule_collection(application,db,ADMIN_CHAT_ID)
+    application.job_queue.run_repeating(archive.export_job,interval=archive.settings.interval,first=15,name="telegram_archive_export")
     return application
 
 def main(): build_application().run_polling(allowed_updates=Update.ALL_TYPES)
