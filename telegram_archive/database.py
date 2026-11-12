@@ -126,7 +126,7 @@ class ArchiveDatabase:
             """INSERT INTO topics(chat_id, thread_id, name, slug, updated_at)
                VALUES (?, ?, ?, ?, ?)
                ON CONFLICT(chat_id, thread_id) DO UPDATE SET
-                 name=excluded.name, slug=excluded.slug, updated_at=excluded.updated_at""",
+                 name=excluded.name, updated_at=excluded.updated_at""",
             (chat_id, thread_id, name, slug, now),
         )
         self.connection.commit()

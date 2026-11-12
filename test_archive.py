@@ -92,6 +92,18 @@ class ArchiveTests(unittest.TestCase):
         self.assertEqual(asyncio.run(self.service.export_once()), 1)
         self.assertTrue(all("github_pat_" not in body for body in self.github.files.values()))
 
+    def test_existing_topics_export_without_commands(self):
+        self.approve()
+        self.service.store_message(message(10, "Первое сообщение", thread_id=42))
+        self.service.store_message(message(11, "Второе сообщение", thread_id=43))
+        self.assertEqual(asyncio.run(self.service.export_once()), 2)
+        self.assertTrue(any("тема-42--42" in path for path in self.github.files))
+        self.assertTrue(any("тема-43--43" in path for path in self.github.files))
+        self.service.register_topic(CHAT, 42, "Позднее название")
+        self.assertEqual(asyncio.run(self.service.export_once()), 1)
+        self.assertEqual(len(self.github.files), 2)
+        self.assertTrue(any("Позднее название" in body for body in self.github.files.values()))
+
     def test_failed_export_retries_without_losing_data(self):
         self.approve()
         self.service.register_topic(CHAT, 42, "Новости")

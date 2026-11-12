@@ -255,7 +255,6 @@ def build_application():
     application=Application.builder().token(TOKEN).build()
     application.add_handler(MessageHandler(filters.ChatType.GROUPS,archive.incoming),group=-1)
     application.add_handler(ChatMemberHandler(archive.membership,ChatMemberHandler.MY_CHAT_MEMBER))
-    application.add_handler(CommandHandler("topic_name",archive.topic_name))
     application.add_handler(CommandHandler("start",start)); application.add_handler(CommandHandler("menu",start)); application.add_handler(CommandHandler("stats",stats)); application.add_handler(CommandHandler("collection_status",collection_status))
     application.add_handler(CallbackQueryHandler(on_callback)); application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND,receive_proposal)); application.add_handler(ChatJoinRequestHandler(auto_approve)); application.add_error_handler(error_handler)
     schedule_collection(application,db,ADMIN_CHAT_ID)
