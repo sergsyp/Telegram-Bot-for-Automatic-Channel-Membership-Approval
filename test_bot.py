@@ -118,6 +118,25 @@ class BotTests(unittest.TestCase):
                 os.environ["AUTO_APPROVE_CHAT_IDS"] = old
         self.assertEqual(approved, [])
 
+    def test_legacy_join_approval_excludes_new_group(self):
+        approved = []
+        async def approve():
+            approved.append(True)
+        old_mode = os.environ.get("AUTO_APPROVE_LEGACY_MODE")
+        old_exclusions = os.environ.get("AUTO_APPROVE_EXCLUDE_CHAT_IDS")
+        old_allowlist = os.environ.pop("AUTO_APPROVE_CHAT_IDS", None)
+        os.environ["AUTO_APPROVE_LEGACY_MODE"] = "1"
+        os.environ["AUTO_APPROVE_EXCLUDE_CHAT_IDS"] = "-1004317816210"
+        try:
+            for chat_id in (-1004317816210, -1009000000001):
+                request = SimpleNamespace(chat=SimpleNamespace(id=chat_id), from_user=SimpleNamespace(id=123), approve=approve)
+                asyncio.run(auto_approve(SimpleNamespace(chat_join_request=request), None))
+        finally:
+            for key, value in (("AUTO_APPROVE_LEGACY_MODE", old_mode), ("AUTO_APPROVE_EXCLUDE_CHAT_IDS", old_exclusions), ("AUTO_APPROVE_CHAT_IDS", old_allowlist)):
+                if value is None: os.environ.pop(key, None)
+                else: os.environ[key] = value
+        self.assertEqual(approved, [True])
+
     def test_database_persists_user_proposal_and_audit(self):
         with tempfile.TemporaryDirectory() as directory:
             path = os.path.join(directory, "bot.db")

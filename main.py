@@ -167,7 +167,12 @@ async def receive_proposal(update,context):
 async def auto_approve(update,context):
     request=update.chat_join_request
     approved_ids={int(value) for value in os.getenv("AUTO_APPROVE_CHAT_IDS", "").split(",") if value.strip()}
-    if request.chat.id not in approved_ids:
+    excluded_ids={int(value) for value in os.getenv("AUTO_APPROVE_EXCLUDE_CHAT_IDS", "").split(",") if value.strip()}
+    legacy_mode=os.getenv("AUTO_APPROVE_LEGACY_MODE") == "1"
+    if request.chat.id in excluded_ids or (legacy_mode and archive.database.group(request.chat.id)):
+        logger.info("Join request not auto-approved in archived/excluded chat %s",request.chat.id)
+        return
+    if (approved_ids and request.chat.id not in approved_ids) or (not approved_ids and not legacy_mode):
         logger.info("Join request not auto-approved in unlisted chat %s",request.chat.id)
         return
     try:
