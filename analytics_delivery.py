@@ -11,6 +11,8 @@ from datetime import datetime, timezone
 
 
 SOURCES = {"youtube", "vk_video", "rutube", "dzen"}
+# CMS-created releases retain their Telegram post key instead of the imported BotHost ID.
+CONTENT_ID_BY_POST_ID = {379: "telegram:post:379"}
 
 
 def _connect(database_path):
@@ -50,9 +52,10 @@ def enqueue_history(database_path):
         _initialize(database)
         rows = database.execute("""
             SELECT h.id AS history_id,h.view_count,h.collected_at,
-                   ep.id AS publication_id,ep.episode_id,p.code AS source
+                   ep.id AS publication_id,ep.episode_id,pe.telegram_post_id,p.code AS source
             FROM publication_stats_history h
             JOIN episode_publications ep ON ep.id=h.publication_id
+            JOIN podcast_episodes pe ON pe.id=ep.episode_id
             JOIN platforms p ON p.id=ep.platform_id
             WHERE p.code IN ('youtube','vk_video','rutube','dzen')
             ORDER BY h.id
@@ -63,13 +66,17 @@ def enqueue_history(database_path):
                 "recordId": f"{row['source']}:publication:{row['publication_id']}:history:{row['history_id']}",
                 "kind": "metric",
                 "source": row["source"],
-                "contentId": f"bothost:episode:{row['episode_id']}",
+                "contentId": CONTENT_ID_BY_POST_ID.get(row["telegram_post_id"], f"bothost:episode:{row['episode_id']}"),
                 "occurredAt": _utc_iso(row["collected_at"]),
                 "metrics": {"views": row["view_count"]},
             }
             payload = json.dumps(record, ensure_ascii=False, sort_keys=True, separators=(",", ":"))
             inserted += database.execute(
-                "INSERT OR IGNORE INTO analytics_outbox(record_id,source,payload) VALUES(?,?,?)",
+                """INSERT INTO analytics_outbox(record_id,source,payload) VALUES(?,?,?)
+                ON CONFLICT(record_id) DO UPDATE SET payload=excluded.payload,
+                attempts=0,next_attempt_at=CURRENT_TIMESTAMP,last_error=NULL
+                WHERE analytics_outbox.delivered_at IS NULL
+                  AND analytics_outbox.payload<>excluded.payload""",
                 (record["recordId"], record["source"], payload),
             ).rowcount
         return inserted
@@ -133,6 +140,7 @@ def _deliver_batch(database_path, api_url, token, limit=500, transport=None):
                     last_error=?
                 WHERE record_id=?
             """, [(message, row["record_id"]) for row in rows])
+            database.commit()
             raise
         database.executemany(
             "UPDATE analytics_outbox SET delivered_at=CURRENT_TIMESTAMP,receipt=?,last_error=NULL WHERE record_id=?",
