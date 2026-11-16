@@ -44,8 +44,8 @@ class DatabaseTest(unittest.TestCase):
         self.db.sync_podcast_catalog(PODCASTS)
         with self.db.connect() as connection:
             self.assertEqual(connection.execute("SELECT COUNT(*) FROM platforms").fetchone()[0], 7)
-            self.assertEqual(connection.execute("SELECT COUNT(*) FROM podcast_episodes").fetchone()[0], 58)
-            self.assertEqual(connection.execute("SELECT COUNT(*) FROM episode_publications").fetchone()[0], 58)
+            self.assertEqual(connection.execute("SELECT COUNT(*) FROM podcast_episodes").fetchone()[0], 59)
+            self.assertEqual(connection.execute("SELECT COUNT(*) FROM episode_publications").fetchone()[0], 59)
             self.assertEqual(connection.execute(
                 "SELECT type FROM platforms WHERE code='yandex_music'").fetchone()[0], "audio")
             self.assertEqual(connection.execute(
@@ -113,6 +113,20 @@ class DatabaseTest(unittest.TestCase):
             "yandex_music": "https://music.yandex.ru/album/27600967/track/156259791",
             "youtube": "https://youtu.be/liRdiVqP8Hs",
         })
+
+    def test_latest_episode_is_in_stats_collection_without_duplicates(self):
+        self.db.sync_podcast_catalog(PODCASTS)
+        self.db.sync_publication_links(PUBLICATION_LINKS)
+        self.db.sync_podcast_catalog(PODCASTS)
+        self.db.sync_publication_links(PUBLICATION_LINKS)
+        with self.db.connect() as connection:
+            rows = connection.execute("""SELECT p.code, ep.url FROM episode_publications ep
+                JOIN podcast_episodes pe ON pe.id=ep.episode_id
+                JOIN platforms p ON p.id=ep.platform_id
+                WHERE pe.telegram_post_id=379 ORDER BY p.code""").fetchall()
+        self.assertEqual(len(rows), 5)
+        self.assertEqual(dict(rows), {**PUBLICATION_LINKS[379], "telegram": "https://t.me/sergsyp/379"})
+        self.assertEqual({row["platform_code"] for row in self.db.active_publications() if row["url"] in dict(rows).values()}, set(dict(rows)))
 
     def test_failed_run_does_not_replace_latest_value(self):
         self.db.sync_podcast_catalog({1: [("Выпуск", "Описание", 999)]})
