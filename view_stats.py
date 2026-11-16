@@ -8,7 +8,8 @@ from zoneinfo import ZoneInfo
 
 import httpx
 
-from config import VK_SERVICE_TOKEN
+from analytics_delivery import deliver_history
+from config import ANALYTICS_API_URL, ANALYTICS_INGEST_TOKEN, DATABASE_PATH, VK_SERVICE_TOKEN
 
 logger = logging.getLogger(__name__)
 MAX_RESPONSE_BYTES = 1_500_000
@@ -209,6 +210,22 @@ async def run_daily_collection(database, bot, admin_chat_id):
                 database.save_stats_error(run_id, publication["id"], 3, type(last_error).__name__, str(last_error))
                 errors.append((publication, last_error))
     status = database.finish_stats_run(run_id, successes, len(errors))
+    delivery_error = None
+    try:
+        await asyncio.to_thread(
+            deliver_history,
+            DATABASE_PATH,
+            ANALYTICS_API_URL,
+            ANALYTICS_INGEST_TOKEN,
+        )
+    except Exception as exc:
+        delivery_error = exc
+        logger.exception("Не удалось доставить статистику в sergsyp.ru")
+        errors.append((
+            {"platform_name": "sergsyp.ru", "title": "центральная аналитика",
+             "url": ANALYTICS_API_URL, "last_success_at": None},
+            exc,
+        ))
     if errors:
         from datetime import datetime
         started_msk = datetime.now(ZoneInfo("Europe/Moscow")).strftime("%d.%m.%Y %H:%M мск")
