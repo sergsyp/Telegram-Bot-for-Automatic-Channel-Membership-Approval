@@ -212,12 +212,17 @@ async def run_daily_collection(database, bot, admin_chat_id):
     status = database.finish_stats_run(run_id, successes, len(errors))
     delivery_error = None
     try:
-        await asyncio.to_thread(
-            deliver_history,
-            DATABASE_PATH,
-            ANALYTICS_API_URL,
-            ANALYTICS_INGEST_TOKEN,
-        )
+        if ANALYTICS_API_URL and ANALYTICS_INGEST_TOKEN:
+            await asyncio.to_thread(
+                deliver_history,
+                DATABASE_PATH,
+                ANALYTICS_API_URL,
+                ANALYTICS_INGEST_TOKEN,
+            )
+        elif ANALYTICS_API_URL or ANALYTICS_INGEST_TOKEN:
+            raise ValueError("analytics_delivery_partially_configured")
+        else:
+            logger.info("Центральная аналитика не настроена: локальные просмотры сохранены")
     except Exception as exc:
         delivery_error = exc
         logger.exception("Не удалось доставить статистику в sergsyp.ru")

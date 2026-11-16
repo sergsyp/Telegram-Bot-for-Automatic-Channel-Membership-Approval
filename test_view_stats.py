@@ -42,5 +42,24 @@ class ViewStatsTest(unittest.TestCase):
         self.assertEqual(parse_youtube_video_id("https://youtu.be/EAZvhLhImec"), "EAZvhLhImec")
 
 
+class LocalOnlyCollectionTest(unittest.IsolatedAsyncioTestCase):
+    async def test_no_cms_credentials_keeps_local_collection_without_delivery_alert(self):
+        from unittest.mock import AsyncMock, MagicMock, patch
+        import view_stats
+
+        database = MagicMock()
+        database.active_publications.return_value = []
+        database.start_stats_run.return_value = 1
+        database.finish_stats_run.return_value = "success"
+        bot = AsyncMock()
+        with patch.object(view_stats, "ANALYTICS_API_URL", ""), patch.object(
+            view_stats, "ANALYTICS_INGEST_TOKEN", ""
+        ), patch.object(view_stats, "deliver_history") as deliver:
+            await view_stats.run_daily_collection(database, bot, 127626487)
+        deliver.assert_not_called()
+        bot.send_message.assert_not_called()
+        database.finish_stats_run.assert_called_once_with(1, 0, 0)
+
+
 if __name__ == "__main__":
     unittest.main()
